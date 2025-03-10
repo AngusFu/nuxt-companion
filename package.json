@@ -2,7 +2,7 @@
   "name": "wemlion-nuxt-helper",
   "displayName": "wemlion-nuxt-helper",
   "description": "nuxt helper",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "publisher": "wemlion",
   "icon": "assets/icon.png",
   "engines": {
