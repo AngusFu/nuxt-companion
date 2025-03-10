@@ -4,7 +4,7 @@ import * as vscode from "vscode";
 import { parseSync } from "@oxc-parser/wasm";
 import * as t from "@oxc-project/types";
 import * as esquery from "esquery";
-import { debounce } from "lodash";
+import { debounce } from "lodash-es";
 
 const eQuery = (node: t.Span, selector: string) =>
   esquery.query(node as any, selector);
