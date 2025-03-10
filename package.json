@@ -1,0 +1,48 @@
+{
+  "name": "wemlion-nuxt-helper",
+  "displayName": "wemlion-nuxt-helper",
+  "description": "Umi locale helper",
+  "version": "0.0.1",
+  "publisher": "wemlion",
+  "icon": "assets/icon.png",
+  "engines": {
+    "vscode": "^1.34.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onLanguage:typescript",
+    "onLanguage:typescriptreact"
+  ],
+  "main": "./out/extension.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AngusFu/nuxt-helper"
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "lint": "eslint . --ext .ts,.tsx",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/esquery": "^1.5.4",
+    "@types/node": "^16.11.7",
+    "@types/vscode": "^1.34.0",
+    "@types/lodash": "^4.17.16",
+    "@typescript-eslint/eslint-plugin": "^5.30.0",
+    "@typescript-eslint/parser": "^5.30.0",
+    "eslint": "^8.13.0",
+    "typescript": "^4.7.2"
+  },
+  "dependencies": {
+    "@oxc-project/types": "^0.56.5",
+    "esquery": "^1.6.0",
+    "lodash": "^4.17.21",
+    "oxc-parser": "^0.56.5"
+  },
+  "contributes": {
+    "snippets": []
+  }
+}
