@@ -6,6 +6,7 @@ import * as t from "@oxc-project/types";
 import * as esquery from "esquery";
 import { debounce } from "lodash";
 
+const eQuery = (node: t.Span, selector: string) => esquery.query(node as any, selector);
 const SUPPORTED_LANGUAGES = ["typescript", "typescriptreact"];
 
 const astCache = new Map<string, Promise<t.CallExpression[]>>();
@@ -21,11 +22,11 @@ const buildASTCache = async (document: vscode.TextDocument) => {
   );
   const parsed = await parseAsync(document.fileName, documentContent);
   const callExprs = [
-    ...esquery.query(
+    ...eQuery(
       parsed.program as unknown as any,
       'CallExpression[callee.name="$api"]'
     ),
-    ...esquery.query(
+    ...eQuery(
       parsed.program as unknown as any,
       'CallExpression[callee.property.name="$api"]'
     ),
@@ -78,15 +79,11 @@ export function activate(context: vscode.ExtensionContext) {
   );
 }
 
-export function deactivate(context: vscode.ExtensionContext): undefined {
-  console.log("Deactivated Extension");
-  return undefined;
-}
-
 class LocaleDefinitionProvider implements vscode.DefinitionProvider {
   async provideDefinition(
     document: vscode.TextDocument,
-    position: vscode.Position
+    position: vscode.Position,
+    cancelToken: vscode.CancellationToken
   ) {
     const folder = vscode.workspace.getWorkspaceFolder(document.uri)?.uri;
     if (!folder) return null;
@@ -105,6 +102,7 @@ class LocaleDefinitionProvider implements vscode.DefinitionProvider {
     );
     if (!quotedRange) return null;
 
+    if (cancelToken.isCancellationRequested) return null;
     const callExpressions = await getDocumentAPICalls(document);
     const expr = (callExpressions || []).find((el) => {
       const range = new vscode.Range(
@@ -120,23 +118,12 @@ class LocaleDefinitionProvider implements vscode.DefinitionProvider {
 
     let method = "get";
     if (config && config.type === "ObjectExpression") {
-      const prop = config.properties
-        .map((el) =>
-          el.type === "Property" &&
-          el.key.type === "Identifier" &&
-          el.key.name === "method" &&
-          el.value.type === "Literal" &&
-          typeof el.value.value === "string"
-            ? el.value.value
-            : null
-        )
-        .filter(Boolean)[0];
-
-      method = prop?.toLowerCase() || method;
+      const res = eQuery(config , 'Property[key.name="method"]>Literal')?.[0] as t.StringLiteral;
+      method = res?.value.toLowerCase() || 'get';
     }
 
-    let glob: string = "";
-    let filter = (uri: vscode.Uri) => true;
+    let glob = "";
+    let filter = (uri: vscode.Uri) => !!uri;
     if (path.type === "Literal" && typeof path.value === "string") {
       glob = path.value.replace(/^\//, "");
     } else if (path.type === "TemplateLiteral") {
@@ -149,6 +136,7 @@ class LocaleDefinitionProvider implements vscode.DefinitionProvider {
     }
     if (!glob) return null;
 
+    if (cancelToken.isCancellationRequested) return null;
     const files = (
       await Promise.all(
         [`${glob}.${method}.ts`, `${glob}/index.${method}.ts`].map((pattern) =>
