@@ -1,16 +1,17 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from "vscode";
-import { parseAsync } from "oxc-parser";
+import { parseSync } from "@oxc-parser/wasm";
 import * as t from "@oxc-project/types";
 import * as esquery from "esquery";
 import { debounce } from "lodash";
 
-const eQuery = (node: t.Span, selector: string) => esquery.query(node as any, selector);
+const eQuery = (node: t.Span, selector: string) =>
+  esquery.query(node as any, selector);
 const SUPPORTED_LANGUAGES = ["typescript", "typescriptreact"];
 
-const astCache = new Map<string, Promise<t.CallExpression[]>>();
-const buildASTCache = async (document: vscode.TextDocument) => {
+const astCache = new Map<string, t.CallExpression[]>();
+const buildASTCache = (document: vscode.TextDocument) => {
   const documentContent = document.getText(
     new vscode.Range(
       new vscode.Position(0, 0),
@@ -20,7 +21,9 @@ const buildASTCache = async (document: vscode.TextDocument) => {
       )
     )
   );
-  const parsed = await parseAsync(document.fileName, documentContent);
+  const parsed = parseSync(documentContent, {
+    sourceFilename: document.uri.path,
+  });
   const callExprs = [
     ...eQuery(
       parsed.program as unknown as any,
@@ -34,12 +37,13 @@ const buildASTCache = async (document: vscode.TextDocument) => {
 
   return callExprs as t.CallExpression[];
 };
-async function getDocumentAPICalls(document: vscode.TextDocument) {
-  let callExpressions = await astCache.get(document.uri.path);
+
+function getDocumentAPICalls(document: vscode.TextDocument) {
+  let callExpressions = astCache.get(document.uri.path);
   if (!callExpressions?.length) {
-    const promise = buildASTCache(document);
-    astCache.set(document.uri.path, promise);
-    callExpressions = await promise;
+    const ast = buildASTCache(document);
+    astCache.set(document.uri.path, ast);
+    callExpressions = ast;
   }
   return callExpressions;
 }
@@ -102,8 +106,7 @@ class LocaleDefinitionProvider implements vscode.DefinitionProvider {
     );
     if (!quotedRange) return null;
 
-    if (cancelToken.isCancellationRequested) return null;
-    const callExpressions = await getDocumentAPICalls(document);
+    const callExpressions = getDocumentAPICalls(document);
     const expr = (callExpressions || []).find((el) => {
       const range = new vscode.Range(
         document.positionAt(el.start),
@@ -118,8 +121,11 @@ class LocaleDefinitionProvider implements vscode.DefinitionProvider {
 
     let method = "get";
     if (config && config.type === "ObjectExpression") {
-      const res = eQuery(config , 'Property[key.name="method"]>Literal')?.[0] as t.StringLiteral;
-      method = res?.value.toLowerCase() || 'get';
+      const res = eQuery(
+        config,
+        'Property[key.name="method"]>Literal'
+      )?.[0] as t.StringLiteral;
+      method = res?.value.toLowerCase() || "get";
     }
 
     let glob = "";

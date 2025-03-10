@@ -28,19 +28,19 @@
   },
   "devDependencies": {
     "@types/esquery": "^1.5.4",
+    "@types/lodash": "^4.17.16",
     "@types/node": "^16.11.7",
     "@types/vscode": "^1.34.0",
-    "@types/lodash": "^4.17.16",
     "@typescript-eslint/eslint-plugin": "^5.30.0",
     "@typescript-eslint/parser": "^5.30.0",
     "eslint": "^8.13.0",
     "typescript": "^4.7.2"
   },
   "dependencies": {
+    "@oxc-parser/wasm": "^0.56.5",
     "@oxc-project/types": "^0.56.5",
     "esquery": "^1.6.0",
-    "lodash": "^4.17.21",
-    "oxc-parser": "^0.56.5"
+    "lodash": "^4.17.21"
   },
   "contributes": {
     "snippets": []
