@@ -1,7 +1,7 @@
 {
   "name": "wemlion-nuxt-helper",
   "displayName": "wemlion-nuxt-helper",
-  "description": "Umi locale helper",
+  "description": "nuxt helper",
   "version": "0.0.1",
   "publisher": "wemlion",
   "icon": "assets/icon.png",
