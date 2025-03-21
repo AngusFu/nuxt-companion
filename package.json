@@ -25,8 +25,8 @@
     "onLanguage:vue"
   ],
   "devDependencies": {
-    "@oxc-parser/wasm": "^0.56.5",
-    "@oxc-project/types": "^0.56.5",
+    "@oxc-parser/wasm": "^0.60.0",
+    "@oxc-project/types": "^0.61.1",
     "@types/esquery": "^1.5.4",
     "@types/lodash-es": "^4.17.12",
     "@types/node": "^16.11.7",
