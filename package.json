@@ -21,7 +21,8 @@
   },
   "activationEvents": [
     "onLanguage:typescript",
-    "onLanguage:typescriptreact"
+    "onLanguage:typescriptreact",
+    "onLanguage:vue"
   ],
   "devDependencies": {
     "@oxc-parser/wasm": "^0.56.5",
