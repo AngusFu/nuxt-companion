@@ -87,38 +87,34 @@ async function provideDefinition(
     if (targetUri.fsPath.endsWith(".d.ts")) {
       const doc = await vscode.workspace.openTextDocument(targetUri);
       const content = doc.getText(targetRange);
-      let contentRange = targetRange;
-
-      // avoid ts variable declarations
-      const replaced = content.replace(/^\s*(?:let|const|var)\s/, "");
-      if (replaced !== content) {
-        const startOffset = content.length - replaced.length;
-        const endOffset = startOffset + replaced.length;
-        contentRange = getRangeFromOffset(
-          doc,
-          targetRange,
-          startOffset,
-          endOffset
-        );
+      const i = content.search(/\(?typeof\s/);
+      if (i < 0) {
+        modifiedDefinitions.push(definition);
+        continue;
       }
 
-      const parsed = parseSync(replaced, {
+      // avoid ts variable declarations
+      const contentRange = getRangeFromOffset(
+        doc,
+        targetRange,
+        i,
+        content.length
+      );
+      const importContent = doc.getText(contentRange);
+
+      const parsed = parseSync(importContent, {
         sourceFilename: targetUri.path,
       });
       const imports = eQuery(
         parsed.program as unknown as any,
         "ImportExpression"
       );
-      const labels = eQuery(
-        parsed.program as unknown as any,
-        "LabeledStatement"
-      );
       const members = eQuery(
         parsed.program as unknown as any,
         "MemberExpression > Literal"
       );
 
-      if (!labels.length || !imports.length || !members.length) {
+      if (!imports.length || !members.length) {
         modifiedDefinitions.push(definition);
         continue;
       }
