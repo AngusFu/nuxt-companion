@@ -408,7 +408,6 @@ function getRouteMeta(fileContent: string) {
         {}
       );
       if (meta) {
-        console.log(meta);
         return meta;
       }
     } catch (e) {}

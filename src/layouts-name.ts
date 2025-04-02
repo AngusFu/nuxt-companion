@@ -3,6 +3,7 @@ import { basename, dirname, extname, normalize, resolve } from "pathe";
 import { kebabCase, splitByCase } from "scule";
 import { withTrailingSlash } from "ufo";
 import { globby } from "globby";
+import { POWERED_BY_INFO } from "./utils/constants";
 
 const QUOTE_RE = /["']/g;
 function getNameFromPath(path: string, relativeTo?: string) {
@@ -80,11 +81,10 @@ export function activate(context: vscode.ExtensionContext) {
   const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   if (!workspaceFolder) return;
 
-
   // watch layouts dir and update layouts info
   // create fs watcher
   const watcher = vscode.workspace.createFileSystemWatcher(
-    new vscode.RelativePattern(workspaceFolder, 'layouts/**/*.vue')
+    new vscode.RelativePattern(workspaceFolder, "layouts/**/*.vue")
   );
   let layoutsInfo: Record<string, { name: string; file: string }> = {};
   watcher.onDidCreate(async (e) => {
@@ -99,60 +99,91 @@ export function activate(context: vscode.ExtensionContext) {
   getLayoutsInfo().then((layouts) => {
     layoutsInfo = layouts;
   });
-
   context.subscriptions.push(watcher);
 
-  vscode.languages.registerDefinitionProvider(["vue"], {
-    provideDefinition: async (document, pos) => {
-      const quotedRange = document.getWordRangeAtPosition(
-        pos,
-        /['"][\w-]+['"]/
-      );
-      if (!quotedRange) return null;
+  const processLayoutAttr = async (
+    document: vscode.TextDocument,
+    pos: vscode.Position
+  ) => {
+    const quotedRange = document.getWordRangeAtPosition(pos, /['"][\w-]+['"]/);
+    if (!quotedRange) return null;
 
-      const attrRange = document.getWordRangeAtPosition(
-        pos,
-        /name=['"][\w-]+['"]/
-      );
-      if (!attrRange) return null;
+    const attrRange = document.getWordRangeAtPosition(
+      pos,
+      /name=['"][\w-]+['"]/
+    );
+    if (!attrRange) return null;
 
-      // check closets `<NuxtLayout`
-      const text = document
-        .getText()
-        .slice(0, document.offsetAt(attrRange.start));
-      let nearestNuxtLayout = text.lastIndexOf("<NuxtLayout");
+    // check closets `<NuxtLayout`
+    const text = document
+      .getText()
+      .slice(0, document.offsetAt(attrRange.start));
+    let nearestNuxtLayout = text.lastIndexOf("<NuxtLayout");
+    if (nearestNuxtLayout < 0) {
+      nearestNuxtLayout = text.lastIndexOf("<nuxt-layout");
       if (nearestNuxtLayout < 0) {
-        nearestNuxtLayout = text.lastIndexOf("<nuxt-layout");
-        if (nearestNuxtLayout < 0) {
-          return null;
-        }
+        return null;
       }
+    }
 
-      const nearestOpenTag = text.lastIndexOf("<");
-      const nearestCloseTag = text.lastIndexOf(">");
-      if (
-        nearestCloseTag < nearestNuxtLayout &&
-        nearestOpenTag === nearestNuxtLayout
-      ) {
-        const name = document.getText(quotedRange).slice(1, -1);
-        const layout = layoutsInfo[name];
-        if (layout) {
-          const targetLoc = new vscode.Location(vscode.Uri.file(layout.file), new vscode.Position(0, 0));
-          const locationLinks: vscode.LocationLink[] = [
-            {
-              targetUri: targetLoc.uri,
-              targetRange: new vscode.Range(
-                new vscode.Position(0, 0),
-                new vscode.Position(0, 0)
-              ),
-              originSelectionRange: quotedRange,
-            },
-          ];
+    const nearestOpenTag = text.lastIndexOf("<");
+    const nearestCloseTag = text.lastIndexOf(">");
+    if (
+      nearestCloseTag < nearestNuxtLayout &&
+      nearestOpenTag === nearestNuxtLayout
+    ) {
+      const name = document.getText(quotedRange).slice(1, -1);
+      const layout = layoutsInfo[name];
+      if (layout) {
+        const targetLoc = new vscode.Location(
+          vscode.Uri.file(layout.file),
+          new vscode.Position(0, 0)
+        );
 
-          return locationLinks;
-        }
+        return {
+          name,
+          file: layout.file,
+          targetLoc,
+          quotedRange,
+        };
       }
-      return null;
+    }
+    return null;
+  };
+
+  const defProvider = vscode.languages.registerDefinitionProvider(["vue"], {
+    provideDefinition: async (document, pos) => {
+      const res = await processLayoutAttr(document, pos);
+      if (!res) return null;
+
+      const locationLinks: vscode.LocationLink[] = [
+        {
+          targetUri: res.targetLoc.uri,
+          targetRange: new vscode.Range(
+            new vscode.Position(0, 0),
+            new vscode.Position(0, 0)
+          ),
+          originSelectionRange: res.quotedRange,
+        },
+      ];
+
+      return locationLinks;
     },
   });
+  context.subscriptions.push(defProvider);
+
+  const hoverProvider = vscode.languages.registerHoverProvider(["vue"], {
+    provideHover: async (document, position) => {
+      const res = await processLayoutAttr(document, position);
+      if (!res) return null;
+
+      return new vscode.Hover(
+        new vscode.MarkdownString(
+          `Probably refers to the **layout**: [${res.name}](${res.file})${POWERED_BY_INFO}`
+        ),
+        res.quotedRange
+      );
+    },
+  });
+  context.subscriptions.push(hoverProvider);
 }

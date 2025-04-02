@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import { resolvePagesRoutes, NuxtPage } from "./utils/nuxt-page";
+import { POWERED_BY_INFO } from "./utils/constants";
 
 export async function activate(context: vscode.ExtensionContext) {
   const workspaceUri = vscode.workspace.workspaceFolders?.[0]?.uri;
@@ -76,22 +77,26 @@ export async function activate(context: vscode.ExtensionContext) {
 
         const { children, ...rest } = route;
 
-        return new vscode.Hover([
-          new vscode.MarkdownString(
-            `Probably refers to the **route**: [${name}](${route.file}).`
-          ),
-          new vscode.MarkdownString(
-            `\`\`\`json\n${JSON.stringify(rest, null, 2)}\n\`\`\``
-          ),
-          // show child names
-          children?.length
-            ? new vscode.MarkdownString(
-                `Child names:\n${children
-                  ?.map((child) => `- [${child.name}](${child.file})`)
-                  .join("\n")}`
-              )
-            : "",
-        ]);
+        return new vscode.Hover(
+          [
+            new vscode.MarkdownString(
+              `Probably refers to the **route**: [${name}](${route.file}).`
+            ),
+            new vscode.MarkdownString(
+              `\`\`\`json\n${JSON.stringify(rest, null, 2)}\n\`\`\``
+            ),
+            // show child names
+            children?.length
+              ? new vscode.MarkdownString(
+                  `Child names:\n${children
+                    ?.map((child) => `- [${child.name}](${child.file})`)
+                    .join("\n")}`
+                )
+              : "",
+            new vscode.MarkdownString(POWERED_BY_INFO),
+          ],
+          quotedRange
+        );
       },
     }
   );
