@@ -14,7 +14,7 @@
   "main": "./out/index.js",
   "scripts": {
     "lint": "eslint . --ext .ts,.tsx",
-    "vscode:prepublish": "bash BUILD.sh"
+    "vscode:prepublish": "make build"
   },
   "contributes": {
     "snippets": [],
