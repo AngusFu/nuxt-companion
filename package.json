@@ -18,9 +18,20 @@
   },
   "contributes": {
     "snippets": [],
+    "commands": [
+      {
+        "command": "nuxtCompanion.toggle",
+        "title": "Toggle Nuxt Companion"
+      }
+    ],
     "configuration": {
       "title": "Nuxt Companion Settings",
       "properties": {
+        "nuxtCompanion.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable or disable Nuxt Companion"
+        },
         "nuxtCompanion.enableLayoutsNameIntelligence": {
           "type": "boolean",
           "default": true,

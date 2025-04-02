@@ -1,8 +1,12 @@
+import { debounce } from "lodash-es";
 import * as vscode from "vscode";
-import { POWERED_BY_INFO } from "./utils/constants";
-import { NuxtPage, resolvePagesRoutes } from "./utils/nuxt-page";
+import { POWERED_BY_INFO } from "../utils/constants";
+import { NuxtPage, resolvePagesRoutes } from "../utils/nuxt-page";
 
-export async function activate(context: vscode.ExtensionContext) {
+export function activate(
+  context: vscode.ExtensionContext,
+  disposeEffects: vscode.Disposable[]
+) {
   const workspaceUri = vscode.workspace.workspaceFolders?.[0]?.uri;
   if (!workspaceUri) return;
 
@@ -11,18 +15,63 @@ export async function activate(context: vscode.ExtensionContext) {
   const watcher = vscode.workspace.createFileSystemWatcher(
     new vscode.RelativePattern(workspaceUri, "pages/**/*.vue")
   );
-  const buildPagesRoutesMap = async () => {
-    const pagesRoutes = await resolvePagesRoutes(pagesDir);
-    pagesRoutesMap.clear();
-    pagesRoutes.forEach((route) => {
-      if (route.name) {
-        pagesRoutesMap.set(route.name, route);
+
+  let currentBuildToken: vscode.CancellationTokenSource | undefined;
+
+  const buildPagesRoutesMap = debounce(
+    async (token?: vscode.CancellationToken) => {
+      // 取消之前的构建任务
+      if (currentBuildToken) {
+        currentBuildToken.cancel();
       }
-    });
-  };
-  watcher.onDidChange(() => buildPagesRoutesMap());
-  watcher.onDidDelete(() => buildPagesRoutesMap());
-  watcher.onDidCreate(() => buildPagesRoutesMap());
+      currentBuildToken = new vscode.CancellationTokenSource();
+
+      try {
+        const pagesRoutes = await resolvePagesRoutes(
+          pagesDir,
+          currentBuildToken.token
+        );
+
+        // 检查是否被取消
+        if (
+          token?.isCancellationRequested ||
+          currentBuildToken.token.isCancellationRequested
+        ) {
+          return;
+        }
+
+        pagesRoutesMap.clear();
+        pagesRoutes.forEach((route) => {
+          if (route.name) {
+            pagesRoutesMap.set(route.name, route);
+          }
+        });
+      } catch (error) {
+        if (
+          !token?.isCancellationRequested &&
+          !currentBuildToken.token.isCancellationRequested
+        ) {
+          console.error("Failed to build pages routes:", error);
+          vscode.window.showErrorMessage(
+            "Failed to build pages routes. Check the console for details."
+          );
+        }
+      } finally {
+        currentBuildToken.dispose();
+        currentBuildToken = undefined;
+      }
+    },
+    1000
+  );
+
+  // 使用防抖处理文件变化事件
+  const debouncedBuild = debounce(buildPagesRoutesMap, 500);
+
+  watcher.onDidChange(() => debouncedBuild());
+  watcher.onDidDelete(() => debouncedBuild());
+  watcher.onDidCreate(() => debouncedBuild());
+
+  // 初始构建
   buildPagesRoutesMap();
 
   const defProvider = vscode.languages.registerDefinitionProvider(
@@ -101,14 +150,18 @@ export async function activate(context: vscode.ExtensionContext) {
     }
   );
 
-  context.subscriptions.push(watcher);
-  context.subscriptions.push(defProvider);
-  context.subscriptions.push(hoverProvider);
-
   // 添加清理函数
-  context.subscriptions.push({
+  disposeEffects.push({
     dispose: () => {
+      watcher.dispose();
+      defProvider.dispose();
+      hoverProvider.dispose();
       pagesRoutesMap.clear();
+
+      if (currentBuildToken) {
+        currentBuildToken.cancel();
+        currentBuildToken.dispose();
+      }
     },
   });
 }

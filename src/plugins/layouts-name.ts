@@ -3,7 +3,7 @@ import { basename, dirname, extname, normalize, resolve } from "pathe";
 import { kebabCase, splitByCase } from "scule";
 import { withTrailingSlash } from "ufo";
 import * as vscode from "vscode";
-import { POWERED_BY_INFO } from "./utils/constants";
+import { POWERED_BY_INFO } from "../utils/constants";
 
 const QUOTE_RE = /["']/g;
 function getNameFromPath(path: string, relativeTo?: string) {
@@ -77,7 +77,10 @@ async function getLayoutsInfo() {
   return layouts;
 }
 
-export function activate(context: vscode.ExtensionContext) {
+export function activate(
+  context: vscode.ExtensionContext,
+  disposeEffects: vscode.Disposable[]
+) {
   const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   if (!workspaceFolder) return;
 
@@ -99,7 +102,6 @@ export function activate(context: vscode.ExtensionContext) {
   getLayoutsInfo().then((layouts) => {
     layoutsInfo = layouts;
   });
-  context.subscriptions.push(watcher);
 
   const processLayoutAttr = async (
     document: vscode.TextDocument,
@@ -170,7 +172,6 @@ export function activate(context: vscode.ExtensionContext) {
       return locationLinks;
     },
   });
-  context.subscriptions.push(defProvider);
 
   const hoverProvider = vscode.languages.registerHoverProvider(["vue"], {
     provideHover: async (document, position) => {
@@ -185,5 +186,12 @@ export function activate(context: vscode.ExtensionContext) {
       );
     },
   });
-  context.subscriptions.push(hoverProvider);
+
+  disposeEffects.push({
+    dispose: () => {
+      watcher.dispose();
+      defProvider.dispose();
+      hoverProvider.dispose();
+    },
+  });
 }

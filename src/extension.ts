@@ -1,27 +1,25 @@
 import * as vscode from "vscode";
+import { StatusBarManager } from "./utils/status-bar-manager";
 
-import { activate as apiToServer } from "./api-to-server";
-import { activate as goToAliasActivate } from "./go-to-alias";
-import { activate as layoutsNameIntelligence } from "./layouts-name";
-import { activate as typedRoutesIntelligence } from "./typed-routes";
-export function activate(context: vscode.ExtensionContext) {
-  const config = vscode.workspace.getConfiguration("nuxtCompanion");
+export async function activate(context: vscode.ExtensionContext) {
+  // check if nuxt.config.{js,ts} exists
+  const workspaceUri = vscode.workspace.workspaceFolders?.[0]?.uri;
+  if (!workspaceUri) {
+    return;
+  }
+  const nuxtConfig = await vscode.workspace.findFiles(
+    new vscode.RelativePattern(workspaceUri, "nuxt.config.{ts,js,mjs}")
+  );
 
-  if (config.get<boolean>("enableApiToServer")) {
-    apiToServer(context);
+  if (nuxtConfig.length === 0) {
+    return;
   }
 
-  if (config.get<boolean>("enableGoToAlias")) {
-    goToAliasActivate(context);
-  }
-
-  if (config.get<boolean>("enableLayoutsNameIntelligence")) {
-    layoutsNameIntelligence(context);
-  }
-
-  if (config.get<boolean>("enableTypedRoutesIntelligence")) {
-    typedRoutesIntelligence(context);
-  }
+  // Initialize and setup status bar
+  const statusBarManager = new StatusBarManager(context);
+  statusBarManager.updateStatus();
+  statusBarManager.registerToggleCommand(context);
+  context.subscriptions.push(statusBarManager);
 }
 
 export function deactivate() {

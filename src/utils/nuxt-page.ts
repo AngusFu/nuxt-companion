@@ -1,5 +1,6 @@
 // Credit https://github.com/nuxt/nuxt/blob/0ce359c8fd2d3784609ad1ea8e5814ac43751436/packages/nuxt/src/pages/utils.ts
 import { readFile } from "node:fs/promises";
+import * as vscode from "vscode";
 
 import { parseSync } from "@oxc-parser/wasm";
 import * as t from "@oxc-project/types";
@@ -10,7 +11,7 @@ import { encodePath, joinURL, withLeadingSlash } from "ufo";
 
 function escapeRE(string: string) {
   // Escape characters with special meaning either inside or outside character sets.
-  // Use a simple backslash escape when it’s always valid, and a \unnnn escape when the simpler form would be disallowed by Unicode patterns’ stricter grammar.
+  // Use a simple backslash escape when it's always valid, and a \unnnn escape when the simpler form would be disallowed by Unicode patterns' stricter grammar.
   return string.replace(/[|\\{}()[\]^$+*?.]/g, "\\$&").replace(/-/g, "\\x2d");
 }
 
@@ -58,14 +59,25 @@ export type NuxtPage = {
 };
 
 export async function resolvePagesRoutes(
-  pagesDir: string = join(process.cwd(), "pages")
+  pagesDir: string = join(process.cwd(), "pages"),
+  token?: vscode.CancellationToken
 ): Promise<NuxtPage[]> {
   const scannedFiles: ScannedFile[] = [];
+
+  // 检查取消状态
+  if (token?.isCancellationRequested) {
+    return [];
+  }
 
   const files = await globby("**/*.{vue,js,ts,jsx,tsx}", {
     cwd: pagesDir,
     absolute: false,
   });
+
+  // 检查取消状态
+  if (token?.isCancellationRequested) {
+    return [];
+  }
 
   for (const file of files) {
     scannedFiles.push({
@@ -73,6 +85,7 @@ export async function resolvePagesRoutes(
       absolutePath: join(pagesDir, file),
     });
   }
+
   // sort scanned files using en-US locale to make the result consistent across different system locales
   scannedFiles.sort((a, b) =>
     a.relativePath.localeCompare(b.relativePath, "en-US")
@@ -82,8 +95,19 @@ export async function resolvePagesRoutes(
     uniqueBy(scannedFiles, "relativePath")
   );
 
+  // 检查取消状态
+  if (token?.isCancellationRequested) {
+    return [];
+  }
+
   const pages = uniqueBy(allRoutes, "path");
-  await augmentPages(pages);
+  await augmentPages(pages, token);
+
+  // 检查取消状态
+  if (token?.isCancellationRequested) {
+    return [];
+  }
+
   const flattedRoutes: NuxtPage[] = [];
   const flatRoute = (route: NuxtPage, acc: NuxtPage[] = []): NuxtPage[] => {
     if (route.children) {
@@ -375,70 +399,100 @@ function prepareRoutes(
   return routes;
 }
 
-async function augmentPages(routes: NuxtPage[]) {
+async function augmentPages(
+  routes: NuxtPage[],
+  token?: vscode.CancellationToken
+) {
   for (const route of routes) {
+    // 检查取消状态
+    if (token?.isCancellationRequested) {
+      return;
+    }
+
     if (route.file) {
-      const routeMeta = await getRouteMeta(route.file);
+      const routeMeta = await getRouteMeta(route.file, token);
       Object.assign(route, routeMeta);
     }
 
     if (route.children && route.children.length > 0) {
-      await augmentPages(route.children);
+      await augmentPages(route.children, token);
     }
   }
 }
 
 const eQuery = (node: t.Span, selector: string) =>
   esquery.query(node as any, selector);
-async function getRouteMeta(file: string) {
-  const fileContent = await readFile(file, "utf-8");
-  let match: any = fileContent.indexOf("definePageMeta");
-  if (match === -1) {
+async function getRouteMeta(file: string, token?: vscode.CancellationToken) {
+  try {
+    // 检查取消状态
+    if (token?.isCancellationRequested) {
+      return null;
+    }
+
+    const fileContent = await readFile(file, "utf-8");
+    let match: any = fileContent.indexOf("definePageMeta");
+    if (match === -1) {
+      return null;
+    }
+
+    // 检查取消状态
+    if (token?.isCancellationRequested) {
+      return null;
+    }
+
+    // get script tag content
+    const scriptStart = fileContent.match(/<script[^>]*>/m);
+    const scriptEnd = fileContent.match(/<\/script>/m);
+    if (!scriptStart || !scriptEnd) return null;
+
+    const scriptContent = fileContent.slice(
+      scriptStart.index! + scriptStart[0].length,
+      scriptEnd.index!
+    );
+
+    try {
+      const parsed = parseSync(scriptContent, {
+        sourceFilename: file.replace(/\.vue$/, ".vue.ts"),
+      });
+      const cloned = JSON.parse(parsed.programJson);
+      parsed.free();
+
+      // 检查取消状态
+      if (token?.isCancellationRequested) {
+        return null;
+      }
+
+      const entries = eQuery(
+        cloned as unknown as any,
+        'CallExpression[callee.name="definePageMeta"]'
+      )
+        .map((el) => (el as t.CallExpression).arguments[0])
+        .filter(
+          (el): el is t.ObjectExpression => el?.type === "ObjectExpression"
+        )
+        .map((el: t.ObjectExpression) =>
+          (el.properties as t.ObjectProperty[])
+            .map((prop) => {
+              if (
+                prop.key.type === "Identifier" &&
+                prop.value.type === "Literal"
+              ) {
+                return [prop.key.name, prop.value.value] as [string, any];
+              }
+              return null!;
+            })
+            .filter(Boolean)
+        )
+        .flat();
+      return entries.length ? Object.fromEntries(entries) : null;
+    } catch (parseError) {
+      console.error(`Failed to parse definePageMeta in ${file}:`, parseError);
+      return null;
+    }
+  } catch (readError) {
+    console.error(`Failed to read file ${file}:`, readError);
     return null;
   }
-
-  // get script tag content
-  const scriptStart = fileContent.match(/<script[^>]*>/m);
-  const scriptEnd = fileContent.match(/<\/script>/m);
-  if (!scriptStart || !scriptEnd) return null;
-
-  const scriptContent = fileContent.slice(
-    scriptStart.index! + scriptStart[0].length,
-    scriptEnd.index!
-  );
-
-  try {
-    const parsed = parseSync(scriptContent, {
-      sourceFilename: file.replace(/\.vue$/, ".vue.ts"),
-    });
-    const cloned = JSON.parse(parsed.programJson);
-    parsed.free();
-
-    const entries = eQuery(
-      cloned as unknown as any,
-      'CallExpression[callee.name="definePageMeta"]'
-    )
-      .map((el) => (el as t.CallExpression).arguments[0])
-      .filter((el): el is t.ObjectExpression => el?.type === "ObjectExpression")
-      .map((el: t.ObjectExpression) =>
-        (el.properties as t.ObjectProperty[])
-          .map((prop) => {
-            if (
-              prop.key.type === "Identifier" &&
-              prop.value.type === "Literal"
-            ) {
-              return [prop.key.name, prop.value.value] as [string, any];
-            }
-            return null!;
-          })
-          .filter(Boolean)
-      )
-      .flat();
-    return entries.length ? Object.fromEntries(entries) : null;
-  } catch (e) {
-    console.error(e);
-  }
-  return null;
 }
 
 /*

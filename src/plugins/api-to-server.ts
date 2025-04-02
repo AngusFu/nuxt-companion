@@ -5,7 +5,7 @@ import * as t from "@oxc-project/types";
 import * as esquery from "esquery";
 import { debounce } from "lodash-es";
 import * as vscode from "vscode";
-import { POWERED_BY_INFO } from "./utils/constants";
+import { POWERED_BY_INFO } from "../utils/constants";
 
 const eQuery = (node: t.Span, selector: string) =>
   esquery.query(node as any, selector);
@@ -124,7 +124,10 @@ async function findAPIFiles(
   return files;
 }
 
-export function activate(context: vscode.ExtensionContext) {
+export function activate(
+  context: vscode.ExtensionContext,
+  disposeEffects: vscode.Disposable[]
+) {
   const onDocumentChange = debounce(
     (document: vscode.TextDocument) => {
       astCache.delete(document.uri.path);
@@ -139,7 +142,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   const definitionProvider = new CustomDefinitionProvider();
 
-  context.subscriptions.push(
+  disposeEffects.push(
     vscode.languages.registerDefinitionProvider(
       SUPPORTED_LANGUAGES,
       definitionProvider
