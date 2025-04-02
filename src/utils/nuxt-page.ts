@@ -1,7 +1,9 @@
 // Credit https://github.com/nuxt/nuxt/blob/0ce359c8fd2d3784609ad1ea8e5814ac43751436/packages/nuxt/src/pages/utils.ts
-import { readFileSync } from "node:fs";
-import { runInNewContext } from "node:vm";
+import { readFile } from "node:fs/promises";
 
+import { parseSync } from "@oxc-parser/wasm";
+import * as t from "@oxc-project/types";
+import * as esquery from "esquery";
 import { globby } from "globby";
 import { extname, join } from "pathe";
 import { encodePath, joinURL, withLeadingSlash } from "ufo";
@@ -376,8 +378,7 @@ function prepareRoutes(
 async function augmentPages(routes: NuxtPage[]) {
   for (const route of routes) {
     if (route.file) {
-      const fileContent = readFileSync(route.file, "utf-8");
-      const routeMeta = getRouteMeta(fileContent);
+      const routeMeta = await getRouteMeta(route.file);
       Object.assign(route, routeMeta);
     }
 
@@ -387,32 +388,56 @@ async function augmentPages(routes: NuxtPage[]) {
   }
 }
 
-const reClose = /\}\s*\)/m;
-function getRouteMeta(fileContent: string) {
-  let match = fileContent.match(/definePageMeta\(\s*\{/m);
-  if (!match) {
+const eQuery = (node: t.Span, selector: string) =>
+  esquery.query(node as any, selector);
+async function getRouteMeta(file: string) {
+  const fileContent = await readFile(file, "utf-8");
+  let match: any = fileContent.indexOf("definePageMeta");
+  if (match === -1) {
     return null;
   }
 
-  const start = match.index! + match[0].length;
-  let rest = fileContent.slice(start, fileContent.length - 1);
+  // get script tag content
+  const scriptStart = fileContent.match(/<script[^>]*>/m);
+  const scriptEnd = fileContent.match(/<\/script>/m);
+  if (!scriptStart || !scriptEnd) return null;
 
-  while ((match = rest.match(reClose))) {
-    const sliceStart = start - 1;
-    const len = match.index! + match[0].length;
-    const content = fileContent.substring(sliceStart, sliceStart + len);
+  const scriptContent = fileContent.slice(
+    scriptStart.index! + scriptStart[0].length,
+    scriptEnd.index!
+  );
 
-    try {
-      const meta = runInNewContext(
-        `JSON.parse(JSON.stringify(${content}))`,
-        {}
-      );
-      if (meta) {
-        return meta;
-      }
-    } catch (e) {}
+  try {
+    const parsed = parseSync(scriptContent, {
+      sourceFilename: file.replace(/\.vue$/, ".vue.ts"),
+    });
+    const cloned = JSON.parse(parsed.programJson);
+    parsed.free();
+
+    const entries = eQuery(
+      cloned as unknown as any,
+      'CallExpression[callee.name="definePageMeta"]'
+    )
+      .map((el) => (el as t.CallExpression).arguments[0])
+      .filter((el): el is t.ObjectExpression => el?.type === "ObjectExpression")
+      .map((el: t.ObjectExpression) =>
+        (el.properties as t.ObjectProperty[])
+          .map((prop) => {
+            if (
+              prop.key.type === "Identifier" &&
+              prop.value.type === "Literal"
+            ) {
+              return [prop.key.name, prop.value.value] as [string, any];
+            }
+            return null!;
+          })
+          .filter(Boolean)
+      )
+      .flat();
+    return entries.length ? Object.fromEntries(entries) : null;
+  } catch (e) {
+    console.error(e);
   }
-
   return null;
 }
 

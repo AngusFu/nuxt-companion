@@ -75,15 +75,12 @@ export async function activate(context: vscode.ExtensionContext) {
         const route = pagesRoutesMap.get(name);
         if (!route) return null;
 
-        const { children, ...rest } = route;
+        const { children } = route;
 
         return new vscode.Hover(
           [
             new vscode.MarkdownString(
               `Probably refers to the **route**: [${name}](${route.file}).`
-            ),
-            new vscode.MarkdownString(
-              `\`\`\`json\n${JSON.stringify(rest, null, 2)}\n\`\`\``
             ),
             // show child names
             children?.length
@@ -93,6 +90,9 @@ export async function activate(context: vscode.ExtensionContext) {
                     .join("\n")}`
                 )
               : "",
+            new vscode.MarkdownString(
+              `\`\`\`json\n${JSON.stringify(route, null, 2)}\n\`\`\``
+            ),
             new vscode.MarkdownString(POWERED_BY_INFO),
           ],
           quotedRange
