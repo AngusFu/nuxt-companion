@@ -1,8 +1,8 @@
-import * as vscode from "vscode";
+import { globby } from "globby";
 import { basename, dirname, extname, normalize, resolve } from "pathe";
 import { kebabCase, splitByCase } from "scule";
 import { withTrailingSlash } from "ufo";
-import { globby } from "globby";
+import * as vscode from "vscode";
 import { POWERED_BY_INFO } from "./utils/constants";
 
 const QUOTE_RE = /["']/g;

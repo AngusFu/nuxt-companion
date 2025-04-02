@@ -2,9 +2,9 @@
  * original code from https://github.com/antfu/vscode-goto-alias
  */
 import { parseSync } from "@oxc-parser/wasm";
-import * as vscode from "vscode";
-import * as esquery from "esquery";
 import * as t from "@oxc-project/types";
+import * as esquery from "esquery";
+import * as vscode from "vscode";
 
 const eQuery = (node: t.Span, selector: string) =>
   esquery.query(node as any, selector);
@@ -105,12 +105,11 @@ async function provideDefinition(
       const parsed = parseSync(importContent, {
         sourceFilename: targetUri.path,
       });
-      const imports = eQuery(
-        parsed.program as unknown as any,
-        "ImportExpression"
-      );
+      const cloned = JSON.parse(parsed.programJson);
+      parsed.free();
+      const imports = eQuery(cloned as unknown as any, "ImportExpression");
       const members = eQuery(
-        parsed.program as unknown as any,
+        cloned as unknown as any,
         "MemberExpression > Literal"
       );
 

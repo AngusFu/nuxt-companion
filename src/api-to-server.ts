@@ -1,10 +1,10 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
-import * as vscode from "vscode";
 import { parseSync } from "@oxc-parser/wasm";
 import * as t from "@oxc-project/types";
 import * as esquery from "esquery";
 import { debounce } from "lodash-es";
+import * as vscode from "vscode";
 import { POWERED_BY_INFO } from "./utils/constants";
 
 const eQuery = (node: t.Span, selector: string) =>
@@ -25,13 +25,12 @@ const buildASTCache = (document: vscode.TextDocument) => {
   const parsed = parseSync(documentContent, {
     sourceFilename: document.uri.path,
   });
+  const cloned = JSON.parse(parsed.programJson);
+  parsed.free();
   const callExprs = [
+    ...eQuery(cloned as unknown as any, 'CallExpression[callee.name="$api"]'),
     ...eQuery(
-      parsed.program as unknown as any,
-      'CallExpression[callee.name="$api"]'
-    ),
-    ...eQuery(
-      parsed.program as unknown as any,
+      cloned as unknown as any,
       'CallExpression[callee.property.name="$api"]'
     ),
   ];

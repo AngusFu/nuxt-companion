@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
-import { resolvePagesRoutes, NuxtPage } from "./utils/nuxt-page";
 import { POWERED_BY_INFO } from "./utils/constants";
+import { NuxtPage, resolvePagesRoutes } from "./utils/nuxt-page";
 
 export async function activate(context: vscode.ExtensionContext) {
   const workspaceUri = vscode.workspace.workspaceFolders?.[0]?.uri;
