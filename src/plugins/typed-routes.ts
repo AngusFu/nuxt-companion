@@ -114,10 +114,26 @@ export function activate(
     ["typescript", "typescriptreact", "vue"],
     {
       provideHover(document, position, token) {
-        const quotedRange = document.getWordRangeAtPosition(
-          position,
-          /((['"])(?:(?!\2).)*\2)/
-        );
+        const ranges = [
+          document.getWordRangeAtPosition(position, /(['"])(?:(?!\1).)*\1/),
+          // :attr=""; @event=""
+          document.getWordRangeAtPosition(
+            position,
+            /(?<![:@][\w-]+=)(['"])(?:(?!\1).)*\1/
+          ),
+          // v-bind=""
+          document.getWordRangeAtPosition(
+            position,
+            /(?<!v-bind=)(['"])(?:(?!\1).)*\1/
+          ),
+        ].filter(Boolean);
+        let quotedRange = ranges.reduce((smallest, current) => {
+          if (!smallest) return current;
+          if (!current) return smallest;
+          return current.end.character - current.start.character < smallest.end.character - smallest.start.character
+            ? current
+            : smallest;
+        });
         if (!quotedRange) return null;
 
         const name = document.getText(quotedRange).slice(1, -1);
