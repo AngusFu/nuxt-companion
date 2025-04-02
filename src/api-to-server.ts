@@ -195,7 +195,12 @@ export function activate(context: vscode.ExtensionContext) {
       ) {
         onDocumentChange(document);
       }
-    })
+    }),
+    {
+      dispose: () => {
+        astCache.clear();
+      },
+    }
   );
 }
 

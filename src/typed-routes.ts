@@ -104,4 +104,11 @@ export async function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(watcher);
   context.subscriptions.push(defProvider);
   context.subscriptions.push(hoverProvider);
+
+  // 添加清理函数
+  context.subscriptions.push({
+    dispose: () => {
+      pagesRoutesMap.clear();
+    },
+  });
 }
