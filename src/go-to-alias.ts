@@ -151,7 +151,7 @@ export function activate(ext: vscode.ExtensionContext) {
   let lock = false;
   showSettingsUpdateDialog(ext);
 
-  vscode.languages.registerDefinitionProvider(
+  const provider = vscode.languages.registerDefinitionProvider(
     ["typescript", "typescriptreact", "vue"],
     {
       async provideDefinition(
@@ -172,4 +172,5 @@ export function activate(ext: vscode.ExtensionContext) {
       },
     }
   );
+  ext.subscriptions.push(provider);
 }

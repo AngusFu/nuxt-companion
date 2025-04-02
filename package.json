@@ -26,6 +26,11 @@
           "default": true,
           "description": "Enable layouts name intelligence"
         },
+        "nuxtCompanion.enableTypedRoutesIntelligence": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable typed routes intelligence"
+        },
         "nuxtCompanion.enableApiToServer": {
           "type": "boolean",
           "default": true,
