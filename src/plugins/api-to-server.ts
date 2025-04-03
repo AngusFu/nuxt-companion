@@ -1,218 +1,265 @@
-// The module 'vscode' contains the VS Code extensibility API
-// Import the module and reference it with the alias vscode in your code below
+// VS Code API
+import * as vscode from "vscode";
+
+// Third-party libraries
 import { parseSync } from "@oxc-parser/wasm";
 import * as t from "@oxc-project/types";
 import * as esquery from "esquery";
-import { debounce } from "lodash-es";
-import * as vscode from "vscode";
+
+// Local modules
 import { POWERED_BY_INFO } from "../utils/constants";
+import {
+  BaseCollector,
+  BaseDefinitionProvider,
+  BaseHoverProvider,
+  FileChangeEvent,
+} from "./base";
 
 const eQuery = (node: t.Span, selector: string) =>
   esquery.query(node as any, selector);
 const SUPPORTED_LANGUAGES = ["typescript", "typescriptreact"];
 
-const astCache = new Map<string, t.CallExpression[]>();
-const buildASTCache = (document: vscode.TextDocument) => {
-  const documentContent = document.getText(
-    new vscode.Range(
-      new vscode.Position(0, 0),
-      new vscode.Position(
-        document.lineCount,
-        document.lineAt(document.lineCount - 1).text.length
-      )
-    )
-  );
-  const parsed = parseSync(documentContent, {
-    sourceFilename: document.uri.path,
-  });
-  const cloned = JSON.parse(parsed.programJson);
-  parsed.free();
-  const callExprs = [
-    ...eQuery(cloned as unknown as any, 'CallExpression[callee.name="$api"]'),
-    ...eQuery(
-      cloned as unknown as any,
-      'CallExpression[callee.property.name="$api"]'
-    ),
-  ];
-
-  return callExprs as t.CallExpression[];
-};
-
-function getDocumentAPICalls(document: vscode.TextDocument) {
-  let callExpressions = astCache.get(document.uri.path);
-  if (!callExpressions?.length) {
-    const ast = buildASTCache(document);
-    astCache.set(document.uri.path, ast);
-    callExpressions = ast;
-  }
-  return callExpressions;
+interface APICallInfo {
+  glob: string;
+  method: string;
+  filter: (uri: vscode.Uri) => boolean;
 }
 
-function getAPICallInfo(
-  document: vscode.TextDocument,
-  position: vscode.Position
-) {
-  const quotedRange = document.getWordRangeAtPosition(
-    position,
-    /((['"])(?:(?!\2).)*\2|`(?:[^`\\]|\\.)*`)/
-  );
-  if (!quotedRange) return null;
+class APICollector extends BaseCollector<APICallInfo> {
+  private astCache = new Map<string, t.CallExpression[]>();
 
-  const callExpressions = getDocumentAPICalls(document);
-  const expr = (callExpressions || []).find((el) => {
-    const range = new vscode.Range(
-      document.positionAt(el.start),
-      document.positionAt(el.end)
-    );
-    return range.contains(quotedRange);
-  });
-  if (!expr?.arguments.length) return null;
-
-  const path = expr.arguments[0];
-  const config = expr.arguments[1];
-
-  let method = "get";
-  if (config && config.type === "ObjectExpression") {
-    const res = eQuery(
-      config,
-      'Property[key.name="method"]>Literal'
-    )?.[0] as t.StringLiteral;
-    method = res?.value.toLowerCase() || "get";
+  constructor(workspaceUri: vscode.Uri) {
+    super(workspaceUri, "**/*.{ts,tsx}");
   }
 
-  let glob = "";
-  let filter = (uri: vscode.Uri) => !!uri;
-  if (path.type === "Literal" && typeof path.value === "string") {
-    glob = path.value.replace(/^\//, "");
-  } else if (path.type === "TemplateLiteral") {
-    glob = path.quasis
-      .map((el) => el.value.raw)
-      .join("*")
-      .replace(/^\//, "");
-    const regex = RegExp(glob.replace(/\*/g, () => "\\[.+\\]"));
-    filter = (uri: vscode.Uri) => regex.test(uri.path);
+  protected async buildDataMap(
+    token?: vscode.CancellationToken,
+    event?: FileChangeEvent
+  ): Promise<void> {
+    // 这个collector比较特殊，它不需要主动收集数据
+    // 而是在provideDefinition和provideHover时动态收集
+    if (event) {
+      if (token?.isCancellationRequested) return;
+
+      // 当文件变化时，更新AST缓存
+      const document = await vscode.workspace.openTextDocument(event.uri);
+      if (token?.isCancellationRequested) return;
+
+      this.astCache.set(event.uri.path, this.buildASTCache(document));
+    }
   }
-  if (!glob) return null;
 
-  return {
-    quotedRange,
-    glob,
-    method,
-    filter,
-  };
-}
-
-async function findAPIFiles(
-  folder: vscode.Uri,
-  glob: string,
-  method: string,
-  filter: (uri: vscode.Uri) => boolean
-) {
-  const serverFolder = vscode.Uri.joinPath(folder, "server");
-  const files = (
-    await Promise.all(
-      [`${glob}.${method}.ts`, `${glob}/index.${method}.ts`].map((pattern) =>
-        vscode.workspace.findFiles(
-          new vscode.RelativePattern(serverFolder, pattern)
+  private buildASTCache(document: vscode.TextDocument) {
+    const documentContent = document.getText(
+      new vscode.Range(
+        new vscode.Position(0, 0),
+        new vscode.Position(
+          document.lineCount,
+          document.lineAt(document.lineCount - 1).text.length
         )
       )
-    )
-  )
-    .flat()
-    .filter(filter);
+    );
+    const parsed = parseSync(documentContent, {
+      sourceFilename: document.uri.path,
+    });
+    const cloned = JSON.parse(parsed.programJson);
+    parsed.free();
+    const callExprs = [
+      ...eQuery(cloned as unknown as any, 'CallExpression[callee.name="$api"]'),
+      ...eQuery(
+        cloned as unknown as any,
+        'CallExpression[callee.property.name="$api"]'
+      ),
+    ];
 
-  return files;
-}
+    return callExprs as t.CallExpression[];
+  }
 
-export function activate(
-  context: vscode.ExtensionContext,
-  disposeEffects: vscode.Disposable[]
-) {
-  const onDocumentChange = debounce(
-    (document: vscode.TextDocument) => {
-      astCache.delete(document.uri.path);
-      astCache.set(document.uri.path, buildASTCache(document));
-    },
-    1000,
-    {
-      leading: true,
-      trailing: true,
+  public getDocumentAPICalls(
+    document: vscode.TextDocument,
+    token?: vscode.CancellationToken
+  ) {
+    let callExpressions = this.astCache.get(document.uri.path);
+    if (!callExpressions?.length) {
+      if (token?.isCancellationRequested) return [];
+
+      const ast = this.buildASTCache(document);
+      if (token?.isCancellationRequested) return [];
+
+      this.astCache.set(document.uri.path, ast);
+      callExpressions = ast;
     }
-  );
+    return callExpressions;
+  }
 
-  const definitionProvider = new CustomDefinitionProvider();
-
-  disposeEffects.push(
-    vscode.languages.registerDefinitionProvider(
-      SUPPORTED_LANGUAGES,
-      definitionProvider
-    ),
-    vscode.languages.registerHoverProvider(SUPPORTED_LANGUAGES, {
-      async provideHover(document, position, token) {
-        const apiInfo = getAPICallInfo(document, position);
-        if (!apiInfo) return null;
-
-        const folder = vscode.workspace.getWorkspaceFolder(document.uri)?.uri;
-        if (!folder) return null;
-
-        const serverFolder = vscode.Uri.joinPath(folder, "server");
-        if (document.uri.fsPath.startsWith(serverFolder.fsPath)) return null;
-
-        const files = await findAPIFiles(
-          folder,
-          apiInfo.glob,
-          apiInfo.method,
-          apiInfo.filter
-        );
-
-        if (files[0]) {
-          return new vscode.Hover(
-            new vscode.MarkdownString(
-              `Probably refers to the **API endpoint**: [${apiInfo.glob}](${
-                files[0]
-              }) (${apiInfo.method.toUpperCase()})${POWERED_BY_INFO}`
-            ),
-            apiInfo.quotedRange
-          );
-        }
-
-        return new vscode.Hover(
-          new vscode.MarkdownString(
-            `Probably refers to the **API endpoint**: \`${
-              apiInfo.glob
-            }\` (${apiInfo.method.toUpperCase()})${POWERED_BY_INFO}`
-          ),
-          apiInfo.quotedRange
-        );
-      },
-    }),
-    // 文档关闭
-    vscode.workspace.onDidCloseTextDocument((document) => {
-      astCache.delete(document.uri.path);
-    }),
-    // 监听文档内容变化
-    vscode.workspace.onDidChangeTextDocument(async ({ document }) => {
-      if (
-        SUPPORTED_LANGUAGES.includes(document.languageId) ||
-        /\.tsx?$/.test(document.uri.path)
-      ) {
-        onDocumentChange(document);
-      }
-    }),
-    {
-      dispose: () => {
-        astCache.clear();
-      },
-    }
-  );
-}
-
-class CustomDefinitionProvider implements vscode.DefinitionProvider {
-  async provideDefinition(
+  public getAPICallInfo(
     document: vscode.TextDocument,
     position: vscode.Position,
-    cancelToken: vscode.CancellationToken
-  ) {
+    token?: vscode.CancellationToken
+  ): { info: APICallInfo; range: vscode.Range } | null {
+    if (token?.isCancellationRequested) return null;
+
+    const quotedRange = document.getWordRangeAtPosition(
+      position,
+      /((['"])(?:(?!\2).)*\2|`(?:[^`\\]|\\.)*`)/
+    );
+    if (!quotedRange) return null;
+
+    const callExpressions = this.getDocumentAPICalls(document, token);
+    if (token?.isCancellationRequested) return null;
+
+    const expr = (callExpressions || []).find((el) => {
+      const range = new vscode.Range(
+        document.positionAt(el.start),
+        document.positionAt(el.end)
+      );
+      return range.contains(quotedRange);
+    });
+    if (!expr?.arguments.length) return null;
+
+    const path = expr.arguments[0];
+    const config = expr.arguments[1];
+
+    let method = "get";
+    if (config && config.type === "ObjectExpression") {
+      const res = eQuery(
+        config,
+        'Property[key.name="method"]>Literal'
+      )?.[0] as t.StringLiteral;
+      method = res?.value.toLowerCase() || "get";
+    }
+
+    let glob = "";
+    let filter = (uri: vscode.Uri) => !!uri;
+    if (path.type === "Literal" && typeof path.value === "string") {
+      glob = path.value.replace(/^\//, "");
+    } else if (path.type === "TemplateLiteral") {
+      glob = path.quasis
+        .map((el) => el.value.raw)
+        .join("*")
+        .replace(/^\//, "");
+      const regex = RegExp(glob.replace(/\*/g, () => "\\[.+\\]"));
+      filter = (uri: vscode.Uri) => regex.test(uri.path);
+    }
+    if (!glob) return null;
+
+    return {
+      info: { glob, method, filter },
+      range: quotedRange,
+    };
+  }
+
+  public dispose() {
+    super.dispose();
+    this.astCache.clear();
+  }
+
+  public async findAPIFiles(
+    folder: vscode.Uri,
+    glob: string,
+    method: string,
+    filter: (uri: vscode.Uri) => boolean,
+    token?: vscode.CancellationToken
+  ): Promise<vscode.Uri[]> {
+    const serverFolder = vscode.Uri.joinPath(folder, "server");
+    const patterns = [`${glob}.${method}.ts`, `${glob}/index.${method}.ts`];
+
+    return new Promise(async (resolve) => {
+      const files = (
+        await Promise.all(
+          patterns.map(async (pattern) => {
+            if (token?.isCancellationRequested) {
+              resolve([]);
+              return [];
+            }
+
+            return vscode.workspace.findFiles(
+              new vscode.RelativePattern(serverFolder, pattern),
+              null,
+              1,
+              token
+            );
+          })
+        )
+      )
+        .flat()
+        .filter(filter);
+
+      resolve(files);
+    });
+  }
+}
+
+class APIHoverProvider extends BaseHoverProvider<APICallInfo> {
+  constructor(collector: APICollector) {
+    super(collector);
+  }
+
+  public async provideHover(
+    document: vscode.TextDocument,
+    position: vscode.Position,
+    token: vscode.CancellationToken
+  ): Promise<vscode.Hover | null> {
+    const folder = vscode.workspace.getWorkspaceFolder(document.uri)?.uri;
+    if (!folder) return null;
+
+    const serverFolder = vscode.Uri.joinPath(folder, "server");
+    if (document.uri.fsPath.startsWith(serverFolder.fsPath)) return null;
+
+    const apiInfo = (this.collector as APICollector).getAPICallInfo(
+      document,
+      position,
+      token
+    );
+    if (!apiInfo) return null;
+
+    const files = await (this.collector as APICollector).findAPIFiles(
+      folder,
+      apiInfo.info.glob,
+      apiInfo.info.method,
+      apiInfo.info.filter,
+      token
+    );
+
+    if (files[0]) {
+      return new vscode.Hover(
+        new vscode.MarkdownString(
+          `Probably refers to the **API endpoint**: [${apiInfo.info.glob}](${
+            files[0]
+          }) (${apiInfo.info.method.toUpperCase()})${POWERED_BY_INFO}`
+        ),
+        apiInfo.range
+      );
+    }
+
+    return new vscode.Hover(
+      new vscode.MarkdownString(
+        `Probably refers to the **API endpoint**: \`${
+          apiInfo.info.glob
+        }\` (${apiInfo.info.method.toUpperCase()})${POWERED_BY_INFO}`
+      ),
+      apiInfo.range
+    );
+  }
+
+  protected createHoverContent(
+    data: APICallInfo,
+    range: vscode.Range
+  ): vscode.Hover {
+    throw new Error("Method not implemented.");
+  }
+}
+
+class APIDefinitionProvider extends BaseDefinitionProvider<APICallInfo> {
+  constructor(collector: APICollector) {
+    super(collector);
+  }
+
+  public async provideDefinition(
+    document: vscode.TextDocument,
+    position: vscode.Position,
+    token: vscode.CancellationToken
+  ): Promise<vscode.DefinitionLink[] | null> {
     const folder = vscode.workspace.getWorkspaceFolder(document.uri)?.uri;
     if (!folder) return null;
 
@@ -224,35 +271,79 @@ class CustomDefinitionProvider implements vscode.DefinitionProvider {
       return null;
     }
 
-    const apiInfo = getAPICallInfo(document, position);
+    const apiInfo = (this.collector as APICollector).getAPICallInfo(
+      document,
+      position,
+      token
+    );
     if (!apiInfo) return null;
 
-    if (cancelToken.isCancellationRequested) return null;
-    const files = await findAPIFiles(
+    if (token.isCancellationRequested) return null;
+    const files = await (this.collector as APICollector).findAPIFiles(
       folder,
-      apiInfo.glob,
-      apiInfo.method,
-      apiInfo.filter
+      apiInfo.info.glob,
+      apiInfo.info.method,
+      apiInfo.info.filter,
+      token
     );
-    if (cancelToken.isCancellationRequested) return null;
+    if (token.isCancellationRequested) return null;
 
     if (files[0]) {
-      const targetRange = new vscode.Range(
-        new vscode.Position(0, 0),
-        new vscode.Position(0, 0)
-      );
-      const targetLoc = new vscode.Location(files[0], targetRange);
-      const locationLinks: vscode.LocationLink[] = [
+      return [
         {
-          targetUri: targetLoc.uri,
-          targetRange: targetRange,
-          originSelectionRange: apiInfo.quotedRange,
+          targetUri: files[0],
+          targetRange: new vscode.Range(
+            new vscode.Position(0, 0),
+            new vscode.Position(0, 0)
+          ),
+          originSelectionRange: apiInfo.range,
         },
       ];
-
-      return locationLinks;
     }
 
     return null;
   }
+
+  protected createDefinitionLinks(
+    data: APICallInfo,
+    range: vscode.Range
+  ): vscode.DefinitionLink[] {
+    throw new Error("Method not implemented.");
+  }
+}
+
+export function activate(
+  context: vscode.ExtensionContext,
+  disposeEffects: vscode.Disposable[]
+) {
+  const workspaceUri = vscode.workspace.workspaceFolders?.[0]?.uri;
+  if (!workspaceUri) return;
+
+  const collector = new APICollector(workspaceUri);
+  const hoverProvider = vscode.languages.registerHoverProvider(
+    SUPPORTED_LANGUAGES,
+    new APIHoverProvider(collector)
+  );
+  const defProvider = vscode.languages.registerDefinitionProvider(
+    SUPPORTED_LANGUAGES,
+    new APIDefinitionProvider(collector)
+  );
+
+  // 监听文档内容变化
+  const onDocumentChange = vscode.workspace.onDidChangeTextDocument(
+    ({ document }) => {
+      if (
+        SUPPORTED_LANGUAGES.includes(document.languageId) ||
+        /\.tsx?$/.test(document.uri.path)
+      ) {
+        collector.getDocumentAPICalls(document);
+      }
+    }
+  );
+
+  disposeEffects.push(hoverProvider, defProvider, onDocumentChange, {
+    dispose: () => {
+      collector.dispose();
+    },
+  });
 }

@@ -1,9 +1,21 @@
+// VS Code API
+import * as vscode from "vscode";
+
+// Third-party libraries
+import { relative, resolve } from "path";
 import { globby } from "globby";
-import { basename, dirname, extname, normalize, resolve } from "pathe";
+import { basename, dirname, extname, normalize } from "pathe";
 import { kebabCase, splitByCase } from "scule";
 import { withTrailingSlash } from "ufo";
-import * as vscode from "vscode";
+
+// Local modules
 import { POWERED_BY_INFO } from "../utils/constants";
+import { BaseCollector, BaseDefinitionProvider, BaseHoverProvider, FileChangeEvent } from "./base";
+
+interface LayoutInfo {
+  name: string;
+  file: string;
+}
 
 const QUOTE_RE = /["']/g;
 function getNameFromPath(path: string, relativeTo?: string) {
@@ -53,145 +65,266 @@ function resolveComponentNameSegments(fileName: string, prefixParts: string[]) {
   return [...componentNameParts, ...fileNameParts];
 }
 
-// https://github.com/nuxt/nuxt/blob/2a1e192bced0e85faa2dff93df5f4910799e80b6/packages/nuxt/src/core/app.ts#L158
-async function getLayoutsInfo() {
-  const layouts: Record<string, { name: string; file: string }> = {};
-
-  const srcDir = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  if (!srcDir) {
-    return layouts;
+class LayoutsCollector extends BaseCollector<LayoutInfo> {
+  constructor(workspaceUri: vscode.Uri) {
+    super(workspaceUri, "layouts/**/*.vue");
   }
 
-  const layoutDir = "layouts";
-  const layoutFiles = await globby(`${layoutDir}/**/*.vue`, {
-    cwd: srcDir,
-    absolute: true,
-  });
+  protected async buildDataMap(
+    token?: vscode.CancellationToken,
+    event?: FileChangeEvent
+  ): Promise<void> {
+    const srcDir = this.workspaceUri.fsPath;
+    if (!srcDir) return;
 
-  for (const file of layoutFiles) {
-    const name = getNameFromPath(file, resolve(srcDir, layoutDir));
+    if (token?.isCancellationRequested) return;
 
-    layouts[name] ||= { name, file };
+    const layoutDir = "layouts";
+    const layoutFiles = await globby(`${layoutDir}/**/*.vue`, {
+      cwd: srcDir,
+      absolute: true,
+    });
+
+    if (token?.isCancellationRequested) return;
+
+    this.dataMap.clear();
+    for (const file of layoutFiles) {
+      if (token?.isCancellationRequested) return;
+
+      const name = this.getNameFromPath(file, resolve(srcDir, layoutDir));
+      this.dataMap.set(name, { name, file });
+    }
   }
 
-  return layouts;
+  public getNameFromPath(filePath: string, baseDir: string): string {
+    const relativePath = relative(baseDir, filePath);
+    const name = relativePath
+      .replace(/\.vue$/, "")
+      .replace(/\//g, "-")
+      .toLowerCase();
+    return name;
+  }
+
+  public getLayoutInfo(
+    document: vscode.TextDocument,
+    position: vscode.Position,
+    token?: vscode.CancellationToken
+  ): { info: LayoutInfo; range: vscode.Range } | null {
+    if (token?.isCancellationRequested) return null;
+
+    const quotedRange = document.getWordRangeAtPosition(
+      position,
+      /((['"])(?:(?!\2).)*\2|`(?:[^`\\]|\\.)*`)/
+    );
+    if (!quotedRange) return null;
+
+    const name = document.getText(quotedRange).slice(1, -1);
+    const info = this.dataMap.get(name);
+    if (!info) return null;
+
+    return { info, range: quotedRange };
+  }
+}
+
+class LayoutsHoverProvider extends BaseHoverProvider<LayoutInfo> {
+  constructor(collector: LayoutsCollector) {
+    super(collector);
+  }
+
+  public async provideHover(
+    document: vscode.TextDocument,
+    position: vscode.Position,
+    token: vscode.CancellationToken
+  ): Promise<vscode.Hover | null> {
+    const folder = vscode.workspace.getWorkspaceFolder(document.uri)?.uri;
+    if (!folder) return null;
+
+    const layoutInfo = (this.collector as LayoutsCollector).getLayoutInfo(
+      document,
+      position,
+      token
+    );
+    if (!layoutInfo) return null;
+
+    const files = await this.findLayoutFiles(
+      folder,
+      layoutInfo.info.name,
+      token
+    );
+
+    if (files[0]) {
+      return new vscode.Hover(
+        new vscode.MarkdownString(
+          `Probably refers to the **layout**: [${layoutInfo.info.name}](${
+            files[0]
+          })${POWERED_BY_INFO}`
+        ),
+        layoutInfo.range
+      );
+    }
+
+    return new vscode.Hover(
+      new vscode.MarkdownString(
+        `Probably refers to the **layout**: \`${
+          layoutInfo.info.name
+        }\`${POWERED_BY_INFO}`
+      ),
+      layoutInfo.range
+    );
+  }
+
+  private async findLayoutFiles(
+    folder: vscode.Uri,
+    name: string,
+    token?: vscode.CancellationToken
+  ): Promise<vscode.Uri[]> {
+    const layoutDir = vscode.Uri.joinPath(folder, "layouts");
+    const patterns = [
+      `${name}.vue`,
+      `${name.replace(/-/g, "/")}.vue`,
+      `${name.replace(/-/g, "/")}/index.vue`,
+    ];
+
+    return new Promise(async (resolve) => {
+      const files = (
+        await Promise.all(
+          patterns.map(async (pattern) => {
+            if (token?.isCancellationRequested) {
+              resolve([]);
+              return [];
+            }
+
+            return vscode.workspace.findFiles(
+              new vscode.RelativePattern(layoutDir, pattern),
+              null,
+              1,
+              token
+            );
+          })
+        )
+      ).flat();
+
+      resolve(files);
+    });
+  }
+
+  protected createHoverContent(
+    data: LayoutInfo,
+    range: vscode.Range
+  ): vscode.Hover {
+    throw new Error("Method not implemented.");
+  }
+}
+
+class LayoutsDefinitionProvider extends BaseDefinitionProvider<LayoutInfo> {
+  constructor(collector: LayoutsCollector) {
+    super(collector);
+  }
+
+  public async provideDefinition(
+    document: vscode.TextDocument,
+    position: vscode.Position,
+    token: vscode.CancellationToken
+  ): Promise<vscode.DefinitionLink[] | null> {
+    const folder = vscode.workspace.getWorkspaceFolder(document.uri)?.uri;
+    if (!folder) return null;
+
+    const layoutInfo = (this.collector as LayoutsCollector).getLayoutInfo(
+      document,
+      position,
+      token
+    );
+    if (!layoutInfo) return null;
+
+    if (token.isCancellationRequested) return null;
+    const files = await this.findLayoutFiles(
+      folder,
+      layoutInfo.info.name,
+      token
+    );
+    if (token.isCancellationRequested) return null;
+
+    if (files[0]) {
+      return [
+        {
+          targetUri: files[0],
+          targetRange: new vscode.Range(
+            new vscode.Position(0, 0),
+            new vscode.Position(0, 0)
+          ),
+          originSelectionRange: layoutInfo.range,
+        },
+      ];
+    }
+
+    return null;
+  }
+
+  private async findLayoutFiles(
+    folder: vscode.Uri,
+    name: string,
+    token?: vscode.CancellationToken
+  ): Promise<vscode.Uri[]> {
+    const layoutDir = vscode.Uri.joinPath(folder, "layouts");
+    const patterns = [
+      `${name}.vue`,
+      `${name.replace(/-/g, "/")}.vue`,
+      `${name.replace(/-/g, "/")}/index.vue`,
+    ];
+
+    return new Promise(async (resolve) => {
+      const files = (
+        await Promise.all(
+          patterns.map(async (pattern) => {
+            if (token?.isCancellationRequested) {
+              resolve([]);
+              return [];
+            }
+
+            return vscode.workspace.findFiles(
+              new vscode.RelativePattern(layoutDir, pattern),
+              null,
+              1,
+              token
+            );
+          })
+        )
+      ).flat();
+
+      resolve(files);
+    });
+  }
+
+  protected createDefinitionLinks(
+    data: LayoutInfo,
+    range: vscode.Range
+  ): vscode.DefinitionLink[] {
+    throw new Error("Method not implemented.");
+  }
 }
 
 export function activate(
   context: vscode.ExtensionContext,
   disposeEffects: vscode.Disposable[]
 ) {
-  const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  if (!workspaceFolder) return;
+  const workspaceUri = vscode.workspace.workspaceFolders?.[0]?.uri;
+  if (!workspaceUri) return;
 
-  // watch layouts dir and update layouts info
-  // create fs watcher
-  const watcher = vscode.workspace.createFileSystemWatcher(
-    new vscode.RelativePattern(workspaceFolder, "layouts/**/*.vue")
+  const collector = new LayoutsCollector(workspaceUri);
+  const hoverProvider = vscode.languages.registerHoverProvider(
+    ["vue"],
+    new LayoutsHoverProvider(collector)
   );
-  let layoutsInfo: Record<string, { name: string; file: string }> = {};
-  watcher.onDidCreate(async (e) => {
-    layoutsInfo = await getLayoutsInfo();
-  });
-  watcher.onDidChange(async (e) => {
-    layoutsInfo = await getLayoutsInfo();
-  });
-  watcher.onDidDelete(async (e) => {
-    layoutsInfo = await getLayoutsInfo();
-  });
-  getLayoutsInfo().then((layouts) => {
-    layoutsInfo = layouts;
-  });
-
-  const processLayoutAttr = async (
-    document: vscode.TextDocument,
-    pos: vscode.Position
-  ) => {
-    const quotedRange = document.getWordRangeAtPosition(pos, /['"][\w-]+['"]/);
-    if (!quotedRange) return null;
-
-    const attrRange = document.getWordRangeAtPosition(
-      pos,
-      /name=['"][\w-]+['"]/
-    );
-    if (!attrRange) return null;
-
-    // check closets `<NuxtLayout`
-    const text = document
-      .getText()
-      .slice(0, document.offsetAt(attrRange.start));
-    let nearestNuxtLayout = text.lastIndexOf("<NuxtLayout");
-    if (nearestNuxtLayout < 0) {
-      nearestNuxtLayout = text.lastIndexOf("<nuxt-layout");
-      if (nearestNuxtLayout < 0) {
-        return null;
-      }
-    }
-
-    const nearestOpenTag = text.lastIndexOf("<");
-    const nearestCloseTag = text.lastIndexOf(">");
-    if (
-      nearestCloseTag < nearestNuxtLayout &&
-      nearestOpenTag === nearestNuxtLayout
-    ) {
-      const name = document.getText(quotedRange).slice(1, -1);
-      const layout = layoutsInfo[name];
-      if (layout) {
-        const targetLoc = new vscode.Location(
-          vscode.Uri.file(layout.file),
-          new vscode.Position(0, 0)
-        );
-
-        return {
-          name,
-          file: layout.file,
-          targetLoc,
-          quotedRange,
-        };
-      }
-    }
-    return null;
-  };
-
-  const defProvider = vscode.languages.registerDefinitionProvider(["vue"], {
-    provideDefinition: async (document, pos) => {
-      const res = await processLayoutAttr(document, pos);
-      if (!res) return null;
-
-      const locationLinks: vscode.LocationLink[] = [
-        {
-          targetUri: res.targetLoc.uri,
-          targetRange: new vscode.Range(
-            new vscode.Position(0, 0),
-            new vscode.Position(0, 0)
-          ),
-          originSelectionRange: res.quotedRange,
-        },
-      ];
-
-      return locationLinks;
-    },
-  });
-
-  const hoverProvider = vscode.languages.registerHoverProvider(["vue"], {
-    provideHover: async (document, position) => {
-      const res = await processLayoutAttr(document, position);
-      if (!res) return null;
-
-      return new vscode.Hover(
-        new vscode.MarkdownString(
-          `Probably refers to the **layout**: [${res.name}](${res.file})${POWERED_BY_INFO}`
-        ),
-        res.quotedRange
-      );
-    },
-  });
+  const defProvider = vscode.languages.registerDefinitionProvider(
+    ["vue"],
+    new LayoutsDefinitionProvider(collector)
+  );
 
   disposeEffects.push({
     dispose: () => {
-      watcher.dispose();
-      defProvider.dispose();
+      collector.dispose();
       hoverProvider.dispose();
+      defProvider.dispose();
     },
   });
 }
