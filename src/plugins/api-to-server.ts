@@ -8,6 +8,7 @@ import * as esquery from "esquery";
 
 // Local modules
 import { POWERED_BY_INFO } from "../utils/constants";
+import { processCallExpression, APICallInfo } from "../utils/api-parser";
 import {
   BaseCollector,
   BaseDefinitionProvider,
@@ -18,12 +19,6 @@ import {
 const eQuery = (node: t.Span, selector: string) =>
   esquery.query(node as any, selector);
 const SUPPORTED_LANGUAGES = ["typescript", "typescriptreact"];
-
-interface APICallInfo {
-  glob: string;
-  method: string;
-  filter: (uri: vscode.Uri) => boolean;
-}
 
 class APICollector extends BaseCollector<APICallInfo> {
   private astCache = new Map<string, t.CallExpression[]>();
@@ -65,10 +60,9 @@ class APICollector extends BaseCollector<APICallInfo> {
     const cloned = JSON.parse(parsed.programJson);
     parsed.free();
     const callExprs = [
-      ...eQuery(cloned as unknown as any, 'CallExpression[callee.name="$api"]'),
       ...eQuery(
         cloned as unknown as any,
-        'CallExpression[callee.property.name="$api"]'
+        "CallExpression[arguments.length > 0]"
       ),
     ];
 
@@ -115,36 +109,22 @@ class APICollector extends BaseCollector<APICallInfo> {
       );
       return range.contains(quotedRange);
     });
-    if (!expr?.arguments.length) return null;
+    if (!expr) return null;
 
-    const path = expr.arguments[0];
-    const config = expr.arguments[1];
+    // 使用 api-parser 处理 AST
+    const apiInfo = processCallExpression(expr);
+    if (!apiInfo) return null;
 
-    let method = "get";
-    if (config && config.type === "ObjectExpression") {
-      const res = eQuery(
-        config,
-        'Property[key.name="method"]>Literal'
-      )?.[0] as t.StringLiteral;
-      method = res?.value.toLowerCase() || "get";
-    }
-
-    let glob = "";
-    let filter = (uri: vscode.Uri) => !!uri;
-    if (path.type === "Literal" && typeof path.value === "string") {
-      glob = path.value.replace(/^\//, "");
-    } else if (path.type === "TemplateLiteral") {
-      glob = path.quasis
-        .map((el) => el.value.raw)
-        .join("*")
-        .replace(/^\//, "");
-      const regex = RegExp(glob.replace(/\*/g, () => "\\[.+\\]"));
-      filter = (uri: vscode.Uri) => regex.test(uri.path);
-    }
-    if (!glob) return null;
+    // 将 filter 函数适配为接受 vscode.Uri 参数
+    const filter = (uri: vscode.Uri | string) => apiInfo.filter(uri);
 
     return {
-      info: { glob, method, filter },
+      info: {
+        glob: apiInfo.glob,
+        method: apiInfo.method,
+        filter,
+        regex: apiInfo.regex,
+      },
       range: quotedRange,
     };
   }
@@ -165,27 +145,23 @@ class APICollector extends BaseCollector<APICallInfo> {
     const patterns = [`${glob}.${method}.ts`, `${glob}/index.${method}.ts`];
 
     return new Promise(async (resolve) => {
-      const files = (
-        await Promise.all(
-          patterns.map(async (pattern) => {
-            if (token?.isCancellationRequested) {
-              resolve([]);
-              return [];
-            }
+      const files = await Promise.all(
+        patterns.map(async (pattern) => {
+          if (token?.isCancellationRequested) {
+            resolve([]);
+            return [];
+          }
 
-            return vscode.workspace.findFiles(
-              new vscode.RelativePattern(serverFolder, pattern),
-              null,
-              1,
-              token
-            );
-          })
-        )
-      )
-        .flat()
-        .filter(filter);
+          return vscode.workspace.findFiles(
+            new vscode.RelativePattern(serverFolder, pattern),
+            null,
+            1,
+            token
+          );
+        })
+      );
 
-      resolve(files);
+      resolve(files.flat().filter(filter));
     });
   }
 }
@@ -222,24 +198,21 @@ class APIHoverProvider extends BaseHoverProvider<APICallInfo> {
     );
 
     if (files[0]) {
+      const filePath =
+        apiInfo.info.regex.exec(files[0].path)?.[0] || apiInfo.info.glob;
+
+      const link = `[${filePath}](${files[0].fsPath})`;
+      const method = apiInfo.info.method.toUpperCase();
       return new vscode.Hover(
         new vscode.MarkdownString(
-          `Probably refers to the **API endpoint**: [${apiInfo.info.glob}](${
-            files[0]
-          }) (${apiInfo.info.method.toUpperCase()})${POWERED_BY_INFO}`
+          `Probably refers to the **API endpoint**: ${method} ${link}` +
+            POWERED_BY_INFO
         ),
         apiInfo.range
       );
     }
 
-    return new vscode.Hover(
-      new vscode.MarkdownString(
-        `Probably refers to the **API endpoint**: \`${
-          apiInfo.info.glob
-        }\` (${apiInfo.info.method.toUpperCase()})${POWERED_BY_INFO}`
-      ),
-      apiInfo.range
-    );
+    return null;
   }
 
   protected createHoverContent(
