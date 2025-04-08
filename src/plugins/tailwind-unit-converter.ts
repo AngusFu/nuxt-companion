@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { POWERED_BY_INFO } from "../utils/constants";
 
 interface UnitMatch {
   range: vscode.Range;
@@ -13,7 +14,7 @@ const SUPPORTED_LANGUAGES = ["vue", "typescript", "typescriptreact", "html"];
 
 // Regular expression patterns
 const TAILWIND_CLASS_PATTERN =
-  /(?:^|\s)[-a-zA-Z][-\w]*-\[-?[0-9]+(?:\.[0-9]+)?(?:rem|px)\]/;
+  /(?<=[\:\s'"])([-a-zA-Z][-\w]*-\[-?[0-9]+(?:\.[0-9]+)?(?:rem|px)\])/;
 
 interface ConversionConfig {
   sourceUnit: "px" | "rem";
@@ -328,7 +329,8 @@ export class TailwindUnitConverter implements vscode.Disposable {
               return;
             }
             const convertedValue = this.formatNumber(config.converter(value));
-            const newText = `${match[1]}-[${convertedValue}${config.targetUnit}]`;
+            const prefix = match[1];
+            const newText = `${prefix}-[${convertedValue}${config.targetUnit}]`;
             await editor.edit((editBuilder) => {
               editBuilder.replace(range, newText);
             });
@@ -513,7 +515,7 @@ export class TailwindUnitConverter implements vscode.Disposable {
             config.targetUnit
           }](command:nuxtCompanion.${commandName}?${encodeURIComponent(
             JSON.stringify(args)
-          )})`
+          )})${POWERED_BY_INFO}`
         );
         markdown.isTrusted = true;
         return new vscode.Hover(markdown);
