@@ -1,7 +1,5 @@
 import * as vscode from "vscode";
 
-const REM_TO_PX_RATIO = 16; // 1rem = 16px
-
 interface UnitMatch {
   range: vscode.Range;
   originalText: string;
@@ -11,14 +9,7 @@ interface UnitMatch {
 }
 
 // Supported file types
-const SUPPORTED_LANGUAGES = [
-  "vue",
-  "javascript",
-  "typescript",
-  "javascriptreact",
-  "typescriptreact",
-  "html",
-];
+const SUPPORTED_LANGUAGES = ["vue", "typescript", "typescriptreact", "html"];
 
 // Regular expression patterns
 const TAILWIND_CLASS_PATTERN = /[a-zA-Z-]+-\[[0-9.]+(?:rem|px)\]/;
@@ -30,18 +21,22 @@ interface ConversionConfig {
   converter: (value: number) => number;
 }
 
-const CONVERSION_CONFIGS: Record<"px2rem" | "rem2px", ConversionConfig> = {
+interface BaseConversionConfig {
+  sourceUnit: "px" | "rem";
+  targetUnit: "rem" | "px";
+  pattern: string;
+}
+
+const CONVERSION_CONFIGS: Record<"px2rem" | "rem2px", BaseConversionConfig> = {
   px2rem: {
     sourceUnit: "px",
     targetUnit: "rem",
     pattern: "([a-zA-Z-]+)-\\[([0-9.]+)px\\]",
-    converter: (value: number) => value / REM_TO_PX_RATIO,
   },
   rem2px: {
     sourceUnit: "rem",
     targetUnit: "px",
     pattern: "([a-zA-Z-]+)-\\[([0-9.]+)rem\\]",
-    converter: (value: number) => value * REM_TO_PX_RATIO,
   },
 };
 
@@ -184,7 +179,7 @@ export class TailwindUnitConverter implements vscode.Disposable {
 
   private registerCommands() {
     // Register the px2rem and rem2px commands
-    Object.entries(CONVERSION_CONFIGS).forEach(([commandName, config]) => {
+    Object.entries(CONVERSION_CONFIGS).forEach(([commandName, _]) => {
       this.disposables.push(
         vscode.commands.registerCommand(
           `nuxtCompanion.${commandName}`,
@@ -201,14 +196,22 @@ export class TailwindUnitConverter implements vscode.Disposable {
               editor = await vscode.window.showTextDocument(uri);
               const position = new vscode.Position(line, character);
               editor.selection = new vscode.Selection(position, position);
-              await this.convertUnits(editor, config, true);
+              await this.convertUnits(
+                editor,
+                this.getConversionConfig(commandName as "px2rem" | "rem2px"),
+                true
+              );
             } else {
               // Called from command palette
               editor = vscode.window.activeTextEditor;
               if (editor) {
                 // Check if there's a selection
                 const hasSelection = !editor.selection.isEmpty;
-                await this.convertUnits(editor, config, hasSelection);
+                await this.convertUnits(
+                  editor,
+                  this.getConversionConfig(commandName as "px2rem" | "rem2px"),
+                  hasSelection
+                );
               }
             }
           }
@@ -293,6 +296,17 @@ export class TailwindUnitConverter implements vscode.Disposable {
       // Update all visible editors
       this.updateAllVisibleEditors();
     }
+  }
+
+  private getConversionConfig(type: "px2rem" | "rem2px"): ConversionConfig {
+    const config = CONVERSION_CONFIGS[type];
+    return {
+      ...config,
+      converter:
+        type === "px2rem"
+          ? (value: number) => value / this.remToPxRatio
+          : (value: number) => value * this.remToPxRatio,
+    };
   }
 
   private async convertUnits(
@@ -421,7 +435,12 @@ export class TailwindUnitConverter implements vscode.Disposable {
       const match = new RegExp(config.pattern).exec(text);
       if (match) {
         const value = parseFloat(match[2]);
-        const convertedValue = this.formatNumber(config.converter(value));
+        const conversionConfig = this.getConversionConfig(
+          commandName as "px2rem" | "rem2px"
+        );
+        const convertedValue = this.formatNumber(
+          conversionConfig.converter(value)
+        );
         const markdown = new vscode.MarkdownString();
         markdown.appendText(
           `Equivalent in ${config.targetUnit}: ${formatConvertedValue(
@@ -465,12 +484,22 @@ export class TailwindUnitConverter implements vscode.Disposable {
     const decorations: vscode.DecorationOptions[] = [];
 
     // Add decorations for both rem and px values
-    Object.values(CONVERSION_CONFIGS).forEach((config) => {
+    Object.entries(CONVERSION_CONFIGS).forEach(([type, config]) => {
       const pattern = new RegExp(config.pattern, "g");
-      const matches = this.findMatches(text, editor.document, pattern, config);
+      const conversionConfig = this.getConversionConfig(
+        type as "px2rem" | "rem2px"
+      );
+      const matches = this.findMatches(
+        text,
+        editor.document,
+        pattern,
+        conversionConfig
+      );
 
       for (const match of matches) {
-        const convertedValue = this.formatNumber(config.converter(match.value));
+        const convertedValue = this.formatNumber(
+          conversionConfig.converter(match.value)
+        );
         decorations.push({
           range: match.range,
           renderOptions: {

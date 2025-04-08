@@ -55,7 +55,7 @@ Example:
 
 ## 📋 Requirements
 
-- Nuxt.js project
+- Nuxt.js project with typescript
 - Standard Nuxt.js project structure (pages, layouts, components, server, etc.)
 - Tailwind CSS configuration file (`tailwind.config.js/ts/cjs/mjs`) for unit converter feature
 

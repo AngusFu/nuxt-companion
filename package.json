@@ -90,7 +90,8 @@
   "activationEvents": [
     "onLanguage:typescript",
     "onLanguage:typescriptreact",
-    "onLanguage:vue"
+    "onLanguage:vue",
+    "onLanguage:html"
   ],
   "devDependencies": {
     "@jest/globals": "^29.7.0",
