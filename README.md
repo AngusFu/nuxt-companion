@@ -1,79 +1,133 @@
 # Nuxt Companion 🚀
 
-A powerful VSCode extension that enhances your Nuxt.js development experience with intelligent navigation and type support.
+A powerful VSCode extension that enhances your Nuxt.js development experience with intelligent navigation, type support, and Tailwind CSS utilities.
 
 ## ✨ Features
 
 ### 🎨 Tailwind Unit Converter
 
-- Automatically converts between `rem` and `px` units in Tailwind CSS arbitrary values
-- Hover over any Tailwind arbitrary value to see the equivalent in the other unit
-- Quick conversion commands: Convert to rem (`nuxtCompanion.px2rem`) or px (`nuxtCompanion.rem2px`)
-- Optional inline decorations showing equivalent values
-- Supports `.vue`, `.js`, `.ts`, `.jsx`, `.tsx`, and `.html` files
-- Configurable precision for converted values
-- Works with both single values and batch conversions
+Seamlessly convert between `rem` and `px` units in your Tailwind CSS classes:
 
-Example:
+- **Smart Detection**: Automatically detects and converts arbitrary values in Tailwind CSS classes
+- **Interactive Hover**: Hover over any Tailwind arbitrary value to see its equivalent in the other unit
+- **Quick Commands**:
+  - `nuxtCompanion.px2rem`: Convert px to rem
+  - `nuxtCompanion.rem2px`: Convert rem to px
+- **Inline Preview**: Optional inline decorations showing equivalent values (configurable)
+- **Wide Support**: Works with `.vue`, `.ts`, `.tsx`, and `.html` files
+- **Batch Processing**: Convert multiple values at once in your selection
 
-- Hover over `w-[16px]` to see `w-[1rem]`
-- Convert `mt-[1.5rem]` to `mt-[24px]` with a single click
-- Toggle inline decorations to see equivalent values while coding
+Examples:
+
+```css
+/* Before */
+<div class="w-[16px] h-[32px] mt-[1.5rem] text-[14px]">
+
+/* After hovering/converting */
+<div class="w-[1rem] h-[2rem] mt-[24px] text-[0.875rem]">
+```
 
 ### 🔌 API Navigation
 
-- Click on any api call to jump directly to the corresponding server endpoint
-- Quick access to your server-side API handlers
+Quickly navigate between your frontend API calls and backend handlers:
 
-> ⚠️ Note: This feature is currently only supported in `.ts` or `.tsx` files.
+- **One-Click Navigation**: Jump directly from API calls to corresponding server endpoints
+- **Smart Detection**: Automatically detects and links API calls in your code
+- **Type Safety**: Works with TypeScript for better type inference and safety
+
+> ⚠️ Note: Currently supported in `.ts` or `.tsx` files only.
 
 ### 📁 Layout Navigation
 
-- Hover over the layout name to see the layout definition in a tooltip
-- Click on the layout name in `<NuxtLayout name="your-layout" />` to jump to the layout file
-- Seamlessly navigate between layouts and their usage
+Effortlessly manage your Nuxt layouts:
+
+- **Preview on Hover**: See layout definitions directly in tooltips
+- **Quick Jump**: Click layout names to navigate to their definitions
+- **Auto-completion**: Get smart suggestions for available layouts
+- **Type Support**: Full TypeScript support for layout props and types
+
+Example:
+
+```vue
+<!-- Click on "dashboard" to jump to its definition -->
+<NuxtLayout name="dashboard">
+  <YourComponent />
+</NuxtLayout>
+```
 
 ### 🛣️ Route Navigation
 
-- Hover over route names to see the route definition in a tooltip
-- Click on route names in `useRoute("named.route")` to jump to the route definition
-- Easy navigation between route definitions and their usage
+Smart route management and navigation:
+
+- **Route Preview**: Hover over route names to see their full definitions
+- **Direct Navigation**: Click to jump between route usage and definitions
+- **Type Safety**: Full TypeScript support for route parameters and query types
+
+Example:
+
+```ts
+// Click on "products.detail" to see its definition
+const route = useRoute("products.detail");
+<NuxtLink :to="{ name: 'products.detail', params: { id: 1 } }" />;
+```
 
 ### 🔍 Type Definitions
 
-- Inspired by [vscode-goto-alias](https://github.com/antfu/vscode-goto-alias)
-- Enhanced type definition navigation with a unique approach
-- Support for Nuxt.js built-in types and auto-imported composables
-- Works seamlessly with TypeScript and JavaScript files
+Enhanced TypeScript support inspired by [vscode-goto-alias](https://github.com/antfu/vscode-goto-alias):
 
-## 🚀 Installation
+- **Smart Resolution**: Better type definition navigation for Nuxt.js
+- **Auto-imports**: Support for Nuxt's auto-imported composables
+- **Custom Types**: Works with your project's custom type definitions
+- **Vue Integration**: Seamless support for Vue component types
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+- Nuxt.js project with TypeScript support
+- Standard Nuxt.js project structure
+- Tailwind CSS configuration (for unit converter feature)
+
+### Installation
 
 1. Open VSCode
-2. Go to the Extensions view (Ctrl+Shift+X)
+2. Press `Ctrl+Shift+X` (Windows/Linux) or `Cmd+Shift+X` (macOS)
 3. Search for "Nuxt Companion"
 4. Click Install
 
-## 📋 Requirements
+### Configuration
 
-- Nuxt.js project with typescript
-- Standard Nuxt.js project structure (pages, layouts, components, server, etc.)
-- Tailwind CSS configuration file (`tailwind.config.js/ts/cjs/mjs`) for unit converter feature
+#### Tailwind Unit Converter Settings
+
+Configure in VSCode settings:
+
+```json
+{
+  "nuxtCompanion.tailwindUnitConverterPrecision": 9,
+  "nuxtCompanion.tailwindUnitConverterShowDecorations": false
+}
+```
+
+#### Available Commands
+
+| Command                                       | Description                        | Default Keybinding |
+| --------------------------------------------- | ---------------------------------- | ------------------ |
+| `nuxtCompanion.px2rem`                        | Convert px to rem                  | -                  |
+| `nuxtCompanion.rem2px`                        | Convert rem to px                  | -                  |
+| `nuxtCompanion.toggleTailwindUnitDecorations` | Toggle unit conversion decorations | -                  |
+
+## 🤝 Contributing
+
+Contributions are welcome! Feel free to:
+
+1. Fork the repository
+2. Create your feature branch
+3. Submit a pull request
 
 ## 📄 License
 
 MIT License - see the [LICENSE](LICENSE) file for details.
 
-## ⚙️ Configuration
+## 🐛 Issues & Feedback
 
-### Tailwind Unit Converter Settings
-
-The following settings can be configured in your VSCode settings:
-
-- `nuxtCompanion.tailwindUnitConverterPrecision`: Number of decimal places for converted values (default: 9)
-- `nuxtCompanion.tailwindUnitConverterShowDecorations`: Enable/disable inline decorations showing equivalent values (default: false)
-
-### Commands
-
-- `nuxtCompanion.px2rem`: Convert selected or cursor-position px values to rem
-- `nuxtCompanion.rem2px`: Convert selected or cursor-position rem values to px
-- `nuxtCompanion.toggleTailwindUnitDecorations`: Toggle the visibility of unit conversion decorations
+Found a bug or have a suggestion? Please open an issue on our GitHub repository.
