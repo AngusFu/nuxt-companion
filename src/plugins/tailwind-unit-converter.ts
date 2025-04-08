@@ -108,11 +108,8 @@ export class TailwindUnitConverter implements vscode.Disposable {
       false
     );
 
-    // Get root font size from Tailwind CSS extension config, fallback to our config, then to 16
-    this.remToPxRatio = tailwindConfig.get(
-      "rootFontSize",
-      config.get("tailwindUnitConverterRootFontSize", 16)
-    );
+    // Get root font size from Tailwind CSS extension config
+    this.remToPxRatio = tailwindConfig.get("rootFontSize", 16);
 
     // Create decoration type for showing conversions
     this.decorationType = vscode.window.createTextEditorDecorationType(
@@ -141,19 +138,10 @@ export class TailwindUnitConverter implements vscode.Disposable {
     // Listen for configuration changes
     this.disposables.push(
       vscode.workspace.onDidChangeConfiguration((e) => {
-        if (
-          e.affectsConfiguration("tailwindCSS.rootFontSize") ||
-          e.affectsConfiguration(
-            "nuxtCompanion.tailwindUnitConverterRootFontSize"
-          )
-        ) {
+        if (e.affectsConfiguration("tailwindCSS.rootFontSize")) {
           const newTailwindConfig =
             vscode.workspace.getConfiguration("tailwindCSS");
-          const newConfig = vscode.workspace.getConfiguration("nuxtCompanion");
-          this.remToPxRatio = newTailwindConfig.get(
-            "rootFontSize",
-            newConfig.get("tailwindUnitConverterRootFontSize", 16)
-          );
+          this.remToPxRatio = newTailwindConfig.get("rootFontSize", 16);
           this.updateAllVisibleEditors();
         }
         if (

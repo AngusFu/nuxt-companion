@@ -78,11 +78,6 @@
           "type": "boolean",
           "default": false,
           "description": "Whether to show inline decorations for Tailwind unit conversions"
-        },
-        "nuxtCompanion.tailwindUnitConverterRootFontSize": {
-          "type": "number",
-          "default": 16,
-          "description": "Root font size in pixels for rem/px conversions. This is used as a fallback when Tailwind CSS extension's rootFontSize is not available."
         }
       }
     }
