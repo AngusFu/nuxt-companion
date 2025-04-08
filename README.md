@@ -6,8 +6,10 @@ A powerful VSCode extension that enhances your Nuxt.js development experience wi
 
 ### 🔌 API Navigation
 
-- Click on any `$api()` call to jump directly to the corresponding server endpoint
+- Click on any api call to jump directly to the corresponding server endpoint
 - Quick access to your server-side API handlers
+
+> ⚠️ Note: This feature is currently only supported in `.ts` or `.tsx` files.
 
 ### 📁 Layout Navigation
 
