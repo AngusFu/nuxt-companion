@@ -12,7 +12,8 @@ interface UnitMatch {
 const SUPPORTED_LANGUAGES = ["vue", "typescript", "typescriptreact", "html"];
 
 // Regular expression patterns
-const TAILWIND_CLASS_PATTERN = /[a-zA-Z-]+-\[[0-9.]+(?:rem|px)\]/;
+const TAILWIND_CLASS_PATTERN =
+  /(?:^|\s)[-a-zA-Z][-\w]*-\[-?[0-9]+(?:\.[0-9]+)?(?:rem|px)\]/;
 
 interface ConversionConfig {
   sourceUnit: "px" | "rem";
@@ -31,12 +32,12 @@ const CONVERSION_CONFIGS: Record<"px2rem" | "rem2px", BaseConversionConfig> = {
   px2rem: {
     sourceUnit: "px",
     targetUnit: "rem",
-    pattern: "([a-zA-Z-]+)-\\[([0-9.]+)px\\]",
+    pattern: "([-a-zA-Z][-\\w]*)-\\[(-?[0-9]+(?:\\.[0-9]+)?)px\\]",
   },
   rem2px: {
     sourceUnit: "rem",
     targetUnit: "px",
-    pattern: "([a-zA-Z-]+)-\\[([0-9.]+)rem\\]",
+    pattern: "([-a-zA-Z][-\\w]*)-\\[(-?[0-9]+(?:\\.[0-9]+)?)rem\\]",
   },
 };
 
@@ -96,6 +97,8 @@ export class TailwindUnitConverter implements vscode.Disposable {
   private precision: number;
   private showDecorations: boolean;
   private remToPxRatio: number;
+  private conversionCache: Map<string, string> = new Map();
+  private readonly MAX_CACHE_SIZE = 1000;
 
   constructor(context: vscode.ExtensionContext) {
     // Get configuration values
@@ -137,31 +140,7 @@ export class TailwindUnitConverter implements vscode.Disposable {
 
     // Listen for configuration changes
     this.disposables.push(
-      vscode.workspace.onDidChangeConfiguration((e) => {
-        if (e.affectsConfiguration("tailwindCSS.rootFontSize")) {
-          const newTailwindConfig =
-            vscode.workspace.getConfiguration("tailwindCSS");
-          this.remToPxRatio = newTailwindConfig.get("rootFontSize", 16);
-          this.updateAllVisibleEditors();
-        }
-        if (
-          e.affectsConfiguration("nuxtCompanion.tailwindUnitConverterPrecision")
-        ) {
-          this.precision = config.get("tailwindUnitConverterPrecision", 9);
-          this.updateAllVisibleEditors();
-        }
-        if (
-          e.affectsConfiguration(
-            "nuxtCompanion.tailwindUnitConverterShowDecorations"
-          )
-        ) {
-          this.showDecorations = config.get(
-            "tailwindUnitConverterShowDecorations",
-            false
-          );
-          this.updateAllVisibleEditors();
-        }
-      })
+      vscode.workspace.onDidChangeConfiguration(this.onConfigChange.bind(this))
     );
   }
 
@@ -255,33 +234,54 @@ export class TailwindUnitConverter implements vscode.Disposable {
   }
 
   private formatNumber(value: number): string {
-    return Number(value.toFixed(this.precision)).toString();
+    const cacheKey = `${value}_${this.precision}`;
+    const cached = this.conversionCache.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    const result = Number(value.toFixed(this.precision)).toString();
+
+    if (this.conversionCache.size >= this.MAX_CACHE_SIZE) {
+      const entries = Array.from(this.conversionCache.entries());
+      const halfSize = Math.floor(entries.length / 2);
+      this.conversionCache = new Map(entries.slice(halfSize));
+    }
+    this.conversionCache.set(cacheKey, result);
+
+    return result;
+  }
+
+  private clearCache() {
+    this.conversionCache.clear();
   }
 
   private onConfigChange(e: vscode.ConfigurationChangeEvent) {
+    if (e.affectsConfiguration("tailwindCSS.rootFontSize")) {
+      const newTailwindConfig =
+        vscode.workspace.getConfiguration("tailwindCSS");
+      this.remToPxRatio = newTailwindConfig.get("rootFontSize", 16);
+      this.clearCache();
+      this.updateAllVisibleEditors();
+    }
     if (
       e.affectsConfiguration("nuxtCompanion.tailwindUnitConverterPrecision")
     ) {
-      // Update precision
-      this.precision = vscode.workspace
-        .getConfiguration("nuxtCompanion")
-        .get("tailwindUnitConverterPrecision", 9);
-
-      // Update all visible editors
+      const config = vscode.workspace.getConfiguration("nuxtCompanion");
+      this.precision = config.get("tailwindUnitConverterPrecision", 9);
+      this.clearCache();
       this.updateAllVisibleEditors();
     }
-
     if (
       e.affectsConfiguration(
         "nuxtCompanion.tailwindUnitConverterShowDecorations"
       )
     ) {
-      // Update showDecorations
-      this.showDecorations = vscode.workspace
-        .getConfiguration("nuxtCompanion")
-        .get("tailwindUnitConverterShowDecorations", false);
-
-      // Update all visible editors
+      const config = vscode.workspace.getConfiguration("nuxtCompanion");
+      this.showDecorations = config.get(
+        "tailwindUnitConverterShowDecorations",
+        false
+      );
       this.updateAllVisibleEditors();
     }
   }
@@ -302,78 +302,119 @@ export class TailwindUnitConverter implements vscode.Disposable {
     config: ConversionConfig,
     singleValue: boolean = true
   ) {
-    const document = editor.document;
-    const pattern = new RegExp(config.pattern, "g");
+    try {
+      const document = editor.document;
+      const pattern = new RegExp(config.pattern, "g");
 
-    if (singleValue) {
-      if (editor.selection.isEmpty) {
-        // Convert only at cursor position
-        const position = editor.selection.active;
-        const range = document.getWordRangeAtPosition(
-          position,
-          TAILWIND_CLASS_PATTERN
-        );
+      if (singleValue) {
+        if (editor.selection.isEmpty) {
+          // Convert only at cursor position
+          const position = editor.selection.active;
+          const range = document.getWordRangeAtPosition(
+            position,
+            TAILWIND_CLASS_PATTERN
+          );
 
-        if (!range) {
-          return;
-        }
+          if (!range) {
+            return;
+          }
 
-        const text = document.getText(range);
-        const match = new RegExp(config.pattern).exec(text);
-        if (match) {
-          const value = parseFloat(match[2]);
-          const convertedValue = this.formatNumber(config.converter(value));
-          const newText = `${match[1]}-[${convertedValue}${config.targetUnit}]`;
-          await editor.edit((editBuilder) => {
-            editBuilder.replace(range, newText);
-          });
+          const text = document.getText(range);
+          const match = new RegExp(config.pattern).exec(text);
+          if (match) {
+            const value = parseFloat(match[2]);
+            // Skip 1px values
+            if (config.sourceUnit === "px" && Math.abs(value) === 1) {
+              return;
+            }
+            const convertedValue = this.formatNumber(config.converter(value));
+            const newText = `${match[1]}-[${convertedValue}${config.targetUnit}]`;
+            await editor.edit((editBuilder) => {
+              editBuilder.replace(range, newText);
+            });
+          }
+        } else {
+          // Convert all matches within selection
+          await this.convertSelectedText(editor, pattern, config);
         }
       } else {
-        // Convert all matches within selection
-        const selectedText = document.getText(editor.selection);
-        const matches = this.findMatches(
-          selectedText,
-          document,
-          pattern,
-          config,
-          editor.selection.start
-        );
-
-        if (matches.length === 0) {
-          return;
-        }
-
-        // Sort matches in reverse order to avoid position shifts
-        matches.sort((a, b) => b.range.start.compareTo(a.range.start));
-
-        await editor.edit((editBuilder) => {
-          for (const match of matches) {
-            const convertedValue = this.formatNumber(
-              config.converter(match.value)
-            );
-            const newText = `${match.prefix}-[${convertedValue}${config.targetUnit}]`;
-            editBuilder.replace(match.range, newText);
-          }
-        });
+        // Convert all matches in the document
+        await this.convertAllText(editor, pattern, config);
       }
-    } else {
-      // Convert all matches in the document
-      const text = document.getText();
-      const matches = this.findMatches(text, document, pattern, config);
-
-      // Sort matches in reverse order to avoid position shifts
-      matches.sort((a, b) => b.range.start.compareTo(a.range.start));
-
-      await editor.edit((editBuilder) => {
-        for (const match of matches) {
-          const convertedValue = this.formatNumber(
-            config.converter(match.value)
-          );
-          const newText = `${match.prefix}-[${convertedValue}${config.targetUnit}]`;
-          editBuilder.replace(match.range, newText);
-        }
-      });
+    } catch (error: unknown) {
+      console.error("Error in convertUnits:", error);
+      if (error instanceof Error) {
+        vscode.window.showErrorMessage(
+          `Error converting units: ${error.message}`
+        );
+      } else {
+        vscode.window.showErrorMessage(
+          "An unknown error occurred while converting units"
+        );
+      }
     }
+  }
+
+  private async convertSelectedText(
+    editor: vscode.TextEditor,
+    pattern: RegExp,
+    config: ConversionConfig
+  ) {
+    const document = editor.document;
+    const selectedText = document.getText(editor.selection);
+    const matches = this.findMatches(
+      selectedText,
+      document,
+      pattern,
+      config,
+      editor.selection.start
+    );
+
+    if (matches.length === 0) {
+      return;
+    }
+
+    // Sort matches in reverse order to avoid position shifts
+    matches.sort((a, b) => b.range.start.compareTo(a.range.start));
+
+    await editor.edit((editBuilder) => {
+      for (const match of matches) {
+        if (match.unit === "px" && Math.abs(match.value) === 1) {
+          continue;
+        }
+        const convertedValue = this.formatNumber(config.converter(match.value));
+        const newText = `${match.prefix}-[${convertedValue}${config.targetUnit}]`;
+        editBuilder.replace(match.range, newText);
+      }
+    });
+  }
+
+  private async convertAllText(
+    editor: vscode.TextEditor,
+    pattern: RegExp,
+    config: ConversionConfig
+  ) {
+    const document = editor.document;
+    const text = document.getText();
+    const matches = this.findMatches(text, document, pattern, config);
+
+    if (matches.length === 0) {
+      return;
+    }
+
+    // Sort matches in reverse order to avoid position shifts
+    matches.sort((a, b) => b.range.start.compareTo(a.range.start));
+
+    await editor.edit((editBuilder) => {
+      for (const match of matches) {
+        if (match.unit === "px" && Math.abs(match.value) === 1) {
+          continue;
+        }
+        const convertedValue = this.formatNumber(config.converter(match.value));
+        const newText = `${match.prefix}-[${convertedValue}${config.targetUnit}]`;
+        editBuilder.replace(match.range, newText);
+      }
+    });
   }
 
   private findMatches(
@@ -388,9 +429,10 @@ export class TailwindUnitConverter implements vscode.Disposable {
 
     while ((match = pattern.exec(text)) !== null) {
       const value = parseFloat(match[2]);
+      const prefix = match[1];
 
       // Skip values equals 1px when converting from px to rem
-      if (config.sourceUnit === "px" && value === 1) {
+      if (config.sourceUnit === "px" && Math.abs(value) === 1) {
         continue;
       }
 
@@ -401,12 +443,16 @@ export class TailwindUnitConverter implements vscode.Disposable {
         document.positionAt(document.offsetAt(startOffset) + endPos)
       );
 
+      // 类名前缀如果有负号，需要再次取反
+      const isNegativePrefix = prefix.startsWith("-");
+      const finalValue = isNegativePrefix ? -value : value;
+
       matches.push({
         range,
         originalText: match[0],
-        value: value,
+        value: finalValue,
         unit: config.sourceUnit,
-        prefix: match[1],
+        prefix: prefix,
       });
     }
 
@@ -430,18 +476,25 @@ export class TailwindUnitConverter implements vscode.Disposable {
       const match = new RegExp(config.pattern).exec(text);
       if (match) {
         const value = parseFloat(match[2]);
+        const prefix = match[1];
 
         // Skip hover for values equals 1px when converting from px to rem
-        if (config.sourceUnit === "px" && value === 1) {
+        if (config.sourceUnit === "px" && Math.abs(value) === 1) {
           return undefined;
         }
 
         const conversionConfig = this.getConversionConfig(
           commandName as "px2rem" | "rem2px"
         );
+
+        // 类名前缀如果有负号，需要再次取反
+        const isNegativePrefix = prefix.startsWith("-");
+        const finalValue = isNegativePrefix ? -value : value;
+
         const convertedValue = this.formatNumber(
-          conversionConfig.converter(value)
+          conversionConfig.converter(finalValue)
         );
+
         const markdown = new vscode.MarkdownString();
         markdown.appendText(
           `Equivalent in ${config.targetUnit}: ${formatConvertedValue(
@@ -471,56 +524,62 @@ export class TailwindUnitConverter implements vscode.Disposable {
   }
 
   private updateDecorations(editor: vscode.TextEditor) {
-    if (!SUPPORTED_LANGUAGES.includes(editor.document.languageId)) {
-      return;
-    }
-
-    // If decorations are disabled, clear them and return
-    if (!this.showDecorations) {
-      editor.setDecorations(this.decorationType, []);
-      return;
-    }
-
-    const text = editor.document.getText();
-    const decorations: vscode.DecorationOptions[] = [];
-
-    // Add decorations for both rem and px values
-    Object.entries(CONVERSION_CONFIGS).forEach(([type, config]) => {
-      const pattern = new RegExp(config.pattern, "g");
-      const conversionConfig = this.getConversionConfig(
-        type as "px2rem" | "rem2px"
-      );
-      const matches = this.findMatches(
-        text,
-        editor.document,
-        pattern,
-        conversionConfig
-      );
-
-      for (const match of matches) {
-        // Skip decoration for values equals 1px when converting from px to rem
-        if (match.unit === "px" && match.value === 1) {
-          continue;
-        }
-
-        const convertedValue = this.formatNumber(
-          conversionConfig.converter(match.value)
-        );
-        decorations.push({
-          range: match.range,
-          renderOptions: {
-            after: {
-              contentText: `(${formatConvertedValue(
-                convertedValue,
-                config.targetUnit
-              )})`,
-            },
-          },
-        });
+    try {
+      if (!SUPPORTED_LANGUAGES.includes(editor.document.languageId)) {
+        return;
       }
-    });
 
-    editor.setDecorations(this.decorationType, decorations);
+      // If decorations are disabled, clear them and return
+      if (!this.showDecorations) {
+        editor.setDecorations(this.decorationType, []);
+        return;
+      }
+
+      const text = editor.document.getText();
+      const decorations: vscode.DecorationOptions[] = [];
+
+      // Add decorations for both rem and px values
+      Object.entries(CONVERSION_CONFIGS).forEach(([type, config]) => {
+        const pattern = new RegExp(config.pattern, "g");
+        const conversionConfig = this.getConversionConfig(
+          type as "px2rem" | "rem2px"
+        );
+        const matches = this.findMatches(
+          text,
+          editor.document,
+          pattern,
+          conversionConfig
+        );
+
+        for (const match of matches) {
+          // Skip decoration for values equals 1px when converting from px to rem
+          if (match.unit === "px" && Math.abs(match.value) === 1) {
+            continue;
+          }
+
+          const convertedValue = this.formatNumber(
+            conversionConfig.converter(match.value)
+          );
+
+          decorations.push({
+            range: match.range,
+            renderOptions: {
+              after: {
+                contentText: `(${formatConvertedValue(
+                  convertedValue,
+                  config.targetUnit
+                )})`,
+              },
+            },
+          });
+        }
+      });
+
+      editor.setDecorations(this.decorationType, decorations);
+    } catch (error: unknown) {
+      console.error("Error in updateDecorations:", error);
+      // Don't show error message for decoration updates as they are not critical
+    }
   }
 
   private updateAllVisibleEditors() {
@@ -557,6 +616,8 @@ export class TailwindUnitConverter implements vscode.Disposable {
   }
 
   public dispose() {
+    this.clearCache();
+
     // Clear decorations from all editors
     vscode.window.visibleTextEditors.forEach((editor) => {
       if (editor) {
