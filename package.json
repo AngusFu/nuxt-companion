@@ -22,10 +22,22 @@
       {
         "command": "nuxtCompanion.toggle",
         "title": "Toggle Nuxt Companion"
+      },
+      {
+        "command": "nuxtCompanion.px2rem",
+        "title": "Convert px to rem"
+      },
+      {
+        "command": "nuxtCompanion.rem2px",
+        "title": "Convert rem to px"
+      },
+      {
+        "command": "nuxtCompanion.toggleTailwindUnitDecorations",
+        "title": "Toggle Tailwind Unit Decorations"
       }
     ],
     "configuration": {
-      "title": "Nuxt Companion Settings",
+      "title": "Nuxt Companion",
       "properties": {
         "nuxtCompanion.enabled": {
           "type": "boolean",
@@ -51,6 +63,26 @@
           "type": "boolean",
           "default": true,
           "description": "Enable go to alias"
+        },
+        "nuxtCompanion.enableTailwindUnitConverter": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable Tailwind CSS unit converter (px to rem)"
+        },
+        "nuxtCompanion.tailwindUnitConverterPrecision": {
+          "type": "number",
+          "default": 9,
+          "description": "The number of decimal places to use when converting between units"
+        },
+        "nuxtCompanion.tailwindUnitConverterShowDecorations": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether to show inline decorations for Tailwind unit conversions"
+        },
+        "nuxtCompanion.tailwindUnitConverterRootFontSize": {
+          "type": "number",
+          "default": 16,
+          "description": "Root font size in pixels for rem/px conversions. This is used as a fallback when Tailwind CSS extension's rootFontSize is not available."
         }
       }
     }
