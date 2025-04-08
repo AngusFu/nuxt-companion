@@ -7,3 +7,4 @@ yarn.lock
 tsconfig.json
 example/
 jest.config.js
+assets/icon-original.png
