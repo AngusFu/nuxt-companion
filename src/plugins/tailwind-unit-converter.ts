@@ -387,6 +387,13 @@ export class TailwindUnitConverter implements vscode.Disposable {
     let match: RegExpExecArray | null;
 
     while ((match = pattern.exec(text)) !== null) {
+      const value = parseFloat(match[2]);
+
+      // Skip values equals 1px when converting from px to rem
+      if (config.sourceUnit === "px" && value === 1) {
+        continue;
+      }
+
       const startPos = match.index;
       const endPos = startPos + match[0].length;
       const range = new vscode.Range(
@@ -397,7 +404,7 @@ export class TailwindUnitConverter implements vscode.Disposable {
       matches.push({
         range,
         originalText: match[0],
-        value: parseFloat(match[2]),
+        value: value,
         unit: config.sourceUnit,
         prefix: match[1],
       });
@@ -423,6 +430,12 @@ export class TailwindUnitConverter implements vscode.Disposable {
       const match = new RegExp(config.pattern).exec(text);
       if (match) {
         const value = parseFloat(match[2]);
+
+        // Skip hover for values equals 1px when converting from px to rem
+        if (config.sourceUnit === "px" && value === 1) {
+          return undefined;
+        }
+
         const conversionConfig = this.getConversionConfig(
           commandName as "px2rem" | "rem2px"
         );
@@ -485,6 +498,11 @@ export class TailwindUnitConverter implements vscode.Disposable {
       );
 
       for (const match of matches) {
+        // Skip decoration for values equals 1px when converting from px to rem
+        if (match.unit === "px" && match.value === 1) {
+          continue;
+        }
+
         const convertedValue = this.formatNumber(
           conversionConfig.converter(match.value)
         );
