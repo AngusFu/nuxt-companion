@@ -232,12 +232,6 @@ export class TailwindUnitConverter implements vscode.Disposable {
             );
           // Update decorations
           this.updateAllVisibleEditors();
-          // Show status message
-          vscode.window.showInformationMessage(
-            `Tailwind unit decorations ${
-              this.showDecorations ? "enabled" : "disabled"
-            }`
-          );
         }
       )
     );
