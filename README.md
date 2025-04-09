@@ -27,6 +27,26 @@ Examples:
 <div class="w-[1rem] h-[2rem] mt-[24px] text-[0.875rem]">
 ```
 
+### 📏 Rem/Px Literal Converter
+
+Convert between `rem` and `px` units in string literals:
+
+- **String Literal Support**: Works with any quoted string containing rem or px values
+- **Instant Conversion**: Hover over any string with rem/px values to see their equivalent
+- **Quick Conversion**: One-click conversion from hover menu to transform values
+- **Batch Processing**: Convert all string literals in a file with a single command
+- **Inline Preview**: Shows converted values directly in your code (can be toggled)
+- **Wide Support**: Works with `.vue`, `.ts`, `.tsx`, and `.html` files
+
+Examples:
+
+```javascript
+// Hover over any of these to see conversions
+const padding = "16px"; // Shows: 16px = 1rem (with font-size: 16px)
+const margin = "1.5rem"; // Shows: 1.5rem = 24px (with font-size: 16px)
+const fontSize = `0.875rem`; // Shows: 0.875rem = 14px (with font-size: 16px)
+```
+
 ### 🔌 API Navigation
 
 Quickly navigate between your frontend API calls and backend handlers:
@@ -108,13 +128,28 @@ Configure in VSCode settings:
 }
 ```
 
+#### Rem/Px Literal Converter Settings
+
+Configure in VSCode settings:
+
+```json
+{
+  "nuxtCompanion.enableRemPxLiteralConverter": true,
+  "nuxtCompanion.remPxLiteralPrecision": 9,
+  "nuxtCompanion.remPxLiteralShowDecorations": false
+}
+```
+
 #### Available Commands
 
-| Command                                       | Description                        | Default Keybinding |
-| --------------------------------------------- | ---------------------------------- | ------------------ |
-| `nuxtCompanion.px2rem`                        | Convert px to rem                  | -                  |
-| `nuxtCompanion.rem2px`                        | Convert rem to px                  | -                  |
-| `nuxtCompanion.toggleTailwindUnitDecorations` | Toggle unit conversion decorations | -                  |
+| Command                                       | Description                                     | Default Keybinding |
+| --------------------------------------------- | ----------------------------------------------- | ------------------ |
+| `nuxtCompanion.px2rem`                        | Convert px to rem                               | -                  |
+| `nuxtCompanion.rem2px`                        | Convert rem to px                               | -                  |
+| `nuxtCompanion.literalPx2rem`                 | Convert string literals from px to rem          | -                  |
+| `nuxtCompanion.literalRem2px`                 | Convert string literals from rem to px          | -                  |
+| `nuxtCompanion.toggleTailwindUnitDecorations` | Toggle Tailwind unit conversion decorations     | -                  |
+| `nuxtCompanion.toggleRemPxLiteralDecorations` | Toggle rem/px string literal conversion display | -                  |
 
 ## 🤝 Contributing
 

@@ -4,6 +4,7 @@ import { activate as goToAliasActivate } from "./go-to-alias";
 import { activate as layoutsNameIntelligence } from "./layouts-name";
 import { activate as tailwindUnitConverter } from "./tailwind-unit-converter";
 import { activate as typedRoutesIntelligence } from "./typed-routes";
+import { activate as remPxLiteral } from "./rem-px-literal";
 
 export const plugins: NuxtPlugin[] = [
   {
@@ -30,5 +31,10 @@ export const plugins: NuxtPlugin[] = [
     id: "TailwindUnitConverter",
     name: "Tailwind Unit Converter",
     activate: tailwindUnitConverter,
+  },
+  {
+    id: "RemPxLiteralConverter",
+    name: "Rem/Px Literal Converter",
+    activate: remPxLiteral,
   },
 ];

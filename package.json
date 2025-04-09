@@ -34,6 +34,18 @@
       {
         "command": "nuxtCompanion.toggleTailwindUnitDecorations",
         "title": "Toggle Tailwind Unit Decorations"
+      },
+      {
+        "command": "nuxtCompanion.toggleRemPxLiteralDecorations",
+        "title": "Toggle Rem/Px Literal Decorations"
+      },
+      {
+        "command": "nuxtCompanion.literalPx2rem",
+        "title": "Convert String Literals: px to rem"
+      },
+      {
+        "command": "nuxtCompanion.literalRem2px",
+        "title": "Convert String Literals: rem to px"
       }
     ],
     "configuration": {
@@ -78,6 +90,21 @@
           "type": "boolean",
           "default": false,
           "description": "Whether to show inline decorations for Tailwind unit conversions"
+        },
+        "nuxtCompanion.enableRemPxLiteralConverter": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable Rem/Px Literal Converter for string literals ('1px', \"2rem\", etc.)"
+        },
+        "nuxtCompanion.remPxLiteralPrecision": {
+          "type": "number",
+          "default": 9,
+          "description": "The number of decimal places to use when converting between units in string literals"
+        },
+        "nuxtCompanion.remPxLiteralShowDecorations": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether to show inline decorations for string literal unit conversions"
         }
       }
     }
