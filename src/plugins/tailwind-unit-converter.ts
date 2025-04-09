@@ -151,36 +151,24 @@ export class TailwindUnitConverter implements vscode.Disposable {
       this.disposables.push(
         vscode.commands.registerCommand(
           `nuxtCompanion.${commandName}`,
-          async (uriString?: string, line?: number, character?: number) => {
-            let editor: vscode.TextEditor | undefined;
-
-            if (
-              uriString &&
-              typeof line === "number" &&
-              typeof character === "number"
-            ) {
-              // Called from hover with position info
-              const uri = vscode.Uri.parse(uriString);
-              editor = await vscode.window.showTextDocument(uri);
-              const position = new vscode.Position(line, character);
-              editor.selection = new vscode.Selection(position, position);
+          async (hoverPosition?: vscode.Position) => {
+            const editor = vscode.window.activeTextEditor;
+            if (editor) {
+              // If hover position is provided, use it
+              if (hoverPosition) {
+                editor.selection = new vscode.Selection(
+                  hoverPosition,
+                  hoverPosition
+                );
+              }
+              // Check if there's a selection or hover position
+              const singleValue =
+                editor.selection.isEmpty || hoverPosition !== undefined;
               await this.convertUnits(
                 editor,
                 this.getConversionConfig(commandName as "px2rem" | "rem2px"),
-                true
+                singleValue
               );
-            } else {
-              // Called from command palette
-              editor = vscode.window.activeTextEditor;
-              if (editor) {
-                // Check if there's a selection
-                const hasSelection = !editor.selection.isEmpty;
-                await this.convertUnits(
-                  editor,
-                  this.getConversionConfig(commandName as "px2rem" | "rem2px"),
-                  hasSelection
-                );
-              }
             }
           }
         )
@@ -504,17 +492,13 @@ export class TailwindUnitConverter implements vscode.Disposable {
             config.targetUnit
           )}\n\n`
         );
-        // Add arguments to the command URI to pass the position
-        const args = [
-          document.uri.toString(),
-          range.start.line,
-          range.start.character,
-        ];
+
+        // Add command with hover position
         markdown.appendMarkdown(
           `[Convert to ${
             config.targetUnit
           }](command:nuxtCompanion.${commandName}?${encodeURIComponent(
-            JSON.stringify(args)
+            JSON.stringify([position])
           )})${POWERED_BY_INFO}`
         );
         markdown.isTrusted = true;

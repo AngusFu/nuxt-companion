@@ -104,10 +104,10 @@ export class RemPxLiteralConverter implements vscode.Disposable {
     this.disposables.push(
       vscode.commands.registerCommand(
         "nuxtCompanion.literalPx2rem",
-        async () => {
+        async (hoverPosition?: vscode.Position) => {
           const editor = vscode.window.activeTextEditor;
           if (editor) {
-            await this.convertLiterals(editor, "px2rem");
+            await this.convertLiterals(editor, "px2rem", hoverPosition);
           }
         }
       )
@@ -117,10 +117,10 @@ export class RemPxLiteralConverter implements vscode.Disposable {
     this.disposables.push(
       vscode.commands.registerCommand(
         "nuxtCompanion.literalRem2px",
-        async () => {
+        async (hoverPosition?: vscode.Position) => {
           const editor = vscode.window.activeTextEditor;
           if (editor) {
-            await this.convertLiterals(editor, "rem2px");
+            await this.convertLiterals(editor, "rem2px", hoverPosition);
           }
         }
       )
@@ -129,20 +129,59 @@ export class RemPxLiteralConverter implements vscode.Disposable {
 
   private async convertLiterals(
     editor: vscode.TextEditor,
-    type: "px2rem" | "rem2px"
+    type: "px2rem" | "rem2px",
+    hoverPosition?: vscode.Position
   ) {
     const document = editor.document;
-    const text = document.getText();
     const pattern = type === "px2rem" ? PX_PATTERN : REM_PATTERN;
+    let searchText: string;
+    let searchRange: vscode.Range;
 
-    // Get all matches
+    // If hover position is provided, try to find the unit at that position
+    if (hoverPosition) {
+      const line = document.lineAt(hoverPosition.line);
+      const lineText = line.text;
+      const hoverMatch = this.findMatchAtPosition(
+        lineText,
+        hoverPosition.character,
+        pattern
+      );
+
+      if (hoverMatch) {
+        // Case 1: Hover - only convert the hovered unit
+        searchText = hoverMatch.match[0];
+        searchRange = new vscode.Range(
+          hoverPosition.line,
+          hoverMatch.start,
+          hoverPosition.line,
+          hoverMatch.end
+        );
+      } else {
+        // Fallback to selection if hover position doesn't match a unit
+        searchText = document.getText(editor.selection);
+        searchRange = editor.selection;
+      }
+    } else if (!editor.selection.isEmpty) {
+      // Case 2: Selection - only convert units within the selection
+      searchText = document.getText(editor.selection);
+      searchRange = editor.selection;
+    } else {
+      // Case 3: Full text - convert all units in the document
+      searchText = document.getText();
+      searchRange = new vscode.Range(
+        document.positionAt(0),
+        document.positionAt(searchText.length)
+      );
+    }
+
+    // Get all matches within the search range
     const matches: { range: vscode.Range; newText: string }[] = [];
     let match;
 
-    // We need to reset lastIndex to ensure we start from the beginning
+    // Reset lastIndex to ensure we start from the beginning
     pattern.lastIndex = 0;
 
-    while ((match = pattern.exec(text)) !== null) {
+    while ((match = pattern.exec(searchText)) !== null) {
       const quoteChar = match[1]; // The quote character used (", ', or `)
       const valueStr = match[2]; // The numeric value as a string
       const value = parseFloat(valueStr);
@@ -156,10 +195,17 @@ export class RemPxLiteralConverter implements vscode.Disposable {
       const newUnit = type === "px2rem" ? "rem" : "px";
       const newText = `${quoteChar}${newValue}${newUnit}${quoteChar}`;
 
-      // Create range for this match
-      const startPos = document.positionAt(match.index);
-      const endPos = document.positionAt(match.index + match[0].length);
-      const range = new vscode.Range(startPos, endPos);
+      // Calculate the actual position in the document
+      const matchStartOffset = match.index;
+      const matchStart = document.positionAt(
+        document.offsetAt(searchRange.start) + matchStartOffset
+      );
+      const matchEnd = document.positionAt(
+        document.offsetAt(searchRange.start) +
+          matchStartOffset +
+          match[0].length
+      );
+      const range = new vscode.Range(matchStart, matchEnd);
 
       matches.push({ range, newText });
     }
@@ -174,6 +220,23 @@ export class RemPxLiteralConverter implements vscode.Disposable {
         }
       });
     }
+  }
+
+  private findMatchAtPosition(
+    text: string,
+    position: number,
+    pattern: RegExp
+  ): { match: RegExpExecArray; start: number; end: number } | null {
+    pattern.lastIndex = 0;
+    let match;
+    while ((match = pattern.exec(text)) !== null) {
+      const start = match.index;
+      const end = start + match[0].length;
+      if (position >= start && position <= end) {
+        return { match, start, end };
+      }
+    }
+    return null;
   }
 
   private registerEventListeners() {
@@ -278,12 +341,11 @@ export class RemPxLiteralConverter implements vscode.Disposable {
           `${remValue}rem = ${pxValue}px (with font-size: ${this.remToPxRatio}px)\n\n`
         );
 
-        // Add command to convert to px
-        const uri = document.uri.toString();
-        const lineNumber = position.line;
-        const character = position.character;
+        // Add command to convert to px with hover position
         markdown.appendMarkdown(
-          `[Convert to px](command:nuxtCompanion.literalRem2px)`
+          `[Convert to px](command:nuxtCompanion.literalRem2px?${encodeURIComponent(
+            JSON.stringify([position])
+          )})`
         );
         markdown.isTrusted = true;
 
@@ -313,12 +375,11 @@ export class RemPxLiteralConverter implements vscode.Disposable {
           `${pxValue}px = ${remValue}rem (with font-size: ${this.remToPxRatio}px)\n\n`
         );
 
-        // Add command to convert to rem
-        const uri = document.uri.toString();
-        const lineNumber = position.line;
-        const character = position.character;
+        // Add command to convert to rem with hover position
         markdown.appendMarkdown(
-          `[Convert to rem](command:nuxtCompanion.literalPx2rem)`
+          `[Convert to rem](command:nuxtCompanion.literalPx2rem?${encodeURIComponent(
+            JSON.stringify([position])
+          )})`
         );
         markdown.isTrusted = true;
 
