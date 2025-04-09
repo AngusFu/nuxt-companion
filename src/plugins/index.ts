@@ -1,4 +1,3 @@
-import * as vscode from "vscode";
 import { NuxtPlugin } from "../utils/plugin-manager";
 import { activate as apiToServer } from "./api-to-server";
 import { activate as goToAliasActivate } from "./go-to-alias";
