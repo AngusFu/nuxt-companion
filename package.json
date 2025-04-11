@@ -24,28 +24,12 @@
         "title": "Toggle Nuxt Companion"
       },
       {
-        "command": "nuxtCompanion.px2rem",
-        "title": "Convert px to rem"
-      },
-      {
-        "command": "nuxtCompanion.rem2px",
-        "title": "Convert rem to px"
-      },
-      {
         "command": "nuxtCompanion.toggleTailwindUnitDecorations",
         "title": "Toggle Tailwind Unit Decorations"
       },
       {
         "command": "nuxtCompanion.toggleRemPxLiteralDecorations",
         "title": "Toggle Rem/Px Literal Decorations"
-      },
-      {
-        "command": "nuxtCompanion.literalPx2rem",
-        "title": "Convert String Literals: px to rem"
-      },
-      {
-        "command": "nuxtCompanion.literalRem2px",
-        "title": "Convert String Literals: rem to px"
       }
     ],
     "configuration": {

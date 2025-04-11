@@ -117,23 +117,18 @@ Enhanced TypeScript support inspired by [vscode-goto-alias](https://github.com/a
 
 ### Configuration
 
-#### Tailwind Unit Converter Settings
-
 Configure in VSCode settings:
 
 ```json
 {
+  "nuxtCompanion.enabled": true,
+  "nuxtCompanion.enableLayoutsNameIntelligence": true,
+  "nuxtCompanion.enableTypedRoutesIntelligence": true,
+  "nuxtCompanion.enableApiToServer": true,
+  "nuxtCompanion.enableGoToAlias": true,
+  "nuxtCompanion.enableTailwindUnitConverter": true,
   "nuxtCompanion.tailwindUnitConverterPrecision": 9,
-  "nuxtCompanion.tailwindUnitConverterShowDecorations": false
-}
-```
-
-#### Rem/Px Literal Converter Settings
-
-Configure in VSCode settings:
-
-```json
-{
+  "nuxtCompanion.tailwindUnitConverterShowDecorations": false,
   "nuxtCompanion.enableRemPxLiteralConverter": true,
   "nuxtCompanion.remPxLiteralPrecision": 9,
   "nuxtCompanion.remPxLiteralShowDecorations": false
@@ -144,10 +139,7 @@ Configure in VSCode settings:
 
 | Command                                       | Description                                     | Default Keybinding |
 | --------------------------------------------- | ----------------------------------------------- | ------------------ |
-| `nuxtCompanion.px2rem`                        | Convert px to rem                               | -                  |
-| `nuxtCompanion.rem2px`                        | Convert rem to px                               | -                  |
-| `nuxtCompanion.literalPx2rem`                 | Convert string literals from px to rem          | -                  |
-| `nuxtCompanion.literalRem2px`                 | Convert string literals from rem to px          | -                  |
+| `nuxtCompanion.toggle`                        | Toggle Nuxt Companion on/off                    | -                  |
 | `nuxtCompanion.toggleTailwindUnitDecorations` | Toggle Tailwind unit conversion decorations     | -                  |
 | `nuxtCompanion.toggleRemPxLiteralDecorations` | Toggle rem/px string literal conversion display | -                  |
 
@@ -165,4 +157,4 @@ MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## 🐛 Issues & Feedback
 
-Found a bug or have a suggestion? Please open an issue on our GitHub repository.
+Found a bug or have a suggestion? Please open an issue on our [GitHub repository](https://github.com/AngusFu/nuxt-companion).
