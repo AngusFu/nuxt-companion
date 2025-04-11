@@ -15,6 +15,7 @@ import {
   BaseHoverProvider,
   FileChangeEvent,
 } from "./base";
+import { globbyStream } from "globby";
 
 const eQuery = (node: t.Span, selector: string) =>
   esquery.query(node as any, selector);
@@ -136,33 +137,32 @@ class APICollector extends BaseCollector<APICallInfo> {
 
   public async findAPIFiles(
     folder: vscode.Uri,
-    glob: string,
-    method: string,
-    filter: (uri: vscode.Uri) => boolean,
+    apiInfo: APICallInfo,
     token?: vscode.CancellationToken
   ): Promise<vscode.Uri[]> {
+    if (token?.isCancellationRequested) return [];
+
+    const { glob, method, filter } = apiInfo;
     const serverFolder = vscode.Uri.joinPath(folder, "server");
     const patterns = [`${glob}.${method}.ts`, `${glob}/index.${method}.ts`];
 
-    return new Promise(async (resolve) => {
-      const files = await Promise.all(
-        patterns.map(async (pattern) => {
-          if (token?.isCancellationRequested) {
-            resolve([]);
-            return [];
-          }
-
-          return vscode.workspace.findFiles(
-            new vscode.RelativePattern(serverFolder, pattern),
-            null,
-            1,
-            token
-          );
-        })
-      );
-
-      resolve(files.flat().filter(filter));
+    const stream = globbyStream(patterns, {
+      cwd: serverFolder.fsPath,
+      absolute: true,
     });
+
+    for await (const path of stream) {
+      if (token?.isCancellationRequested) {
+        return [];
+      }
+
+      const file = path.toString();
+      if (filter(vscode.Uri.file(file))) {
+        return [vscode.Uri.file(file)];
+      }
+    }
+
+    return [];
   }
 }
 
@@ -191,9 +191,7 @@ class APIHoverProvider extends BaseHoverProvider<APICallInfo> {
 
     const files = await (this.collector as APICollector).findAPIFiles(
       folder,
-      apiInfo.info.glob,
-      apiInfo.info.method,
-      apiInfo.info.filter,
+      apiInfo.info,
       token
     );
 
@@ -254,9 +252,7 @@ class APIDefinitionProvider extends BaseDefinitionProvider<APICallInfo> {
     if (token.isCancellationRequested) return null;
     const files = await (this.collector as APICollector).findAPIFiles(
       folder,
-      apiInfo.info.glob,
-      apiInfo.info.method,
-      apiInfo.info.filter,
+      apiInfo.info,
       token
     );
     if (token.isCancellationRequested) return null;

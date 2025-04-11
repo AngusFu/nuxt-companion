@@ -1,10 +1,7 @@
 import * as t from "@oxc-project/types";
-import * as esquery from "esquery";
 import * as vscode from "vscode";
+import { parse } from "url";
 import { typeAssertions as ta } from "./type-assertions";
-
-const eQuery = (node: t.Span, selector: string) =>
-  esquery.query(node as any, selector);
 
 export type APICallInfo = {
   glob: string;
@@ -97,8 +94,13 @@ export function processCallExpression(
     path = pathNode.value || "";
   }
   if (path.indexOf("/") < 0) return null;
+  if (path.indexOf("://") > -1) return null;
+  if (path.indexOf("data:") > -1) return null;
 
-  let glob = path.replace(/^\//, "");
+  const pathname = parse(path)!.pathname;
+  if (!pathname) return null;
+
+  let glob = pathname.replace(/^\//, "");
   const regex = RegExp(glob.replace(/\*/g, () => "\\[.+\\]"));
   const filter = (uri: vscode.Uri | string) =>
     regex.test(typeof uri === "string" ? uri : uri.path);
