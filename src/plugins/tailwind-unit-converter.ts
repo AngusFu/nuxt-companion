@@ -14,7 +14,7 @@ const SUPPORTED_LANGUAGES = ["vue", "typescript", "typescriptreact", "html"];
 
 // Regular expression patterns
 const TAILWIND_CLASS_PATTERN =
-  /(?<=[\:\s'"])([-a-zA-Z][-\w]*-\[-?[0-9]+(?:\.[0-9]+)?(?:rem|px)\])/;
+  /(?<=[\:\s'"!])([-a-zA-Z][-\w]*-\[-?[0-9]+(?:\.[0-9]+)?(?:rem|px)\])/;
 
 interface ConversionConfig {
   sourceUnit: "px" | "rem";
