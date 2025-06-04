@@ -1,4 +1,7 @@
 import * as vscode from "vscode";
+import { activate as sidebar } from "./sidebar";
+import { plugins } from "./plugins";
+import { PluginManager } from "./utils/plugin-manager";
 import { StatusBarManager } from "./utils/status-bar-manager";
 
 export async function activate(context: vscode.ExtensionContext) {
@@ -15,11 +18,16 @@ export async function activate(context: vscode.ExtensionContext) {
     return;
   }
 
-  // Initialize and setup status bar
+  const pluginManager = new PluginManager(context, plugins);
   const statusBarManager = new StatusBarManager(context);
   statusBarManager.updateStatus();
   statusBarManager.registerToggleCommand(context);
-  context.subscriptions.push(statusBarManager);
+  statusBarManager.event((enabled) =>
+    pluginManager.updateEnabledState(enabled)
+  );
+  pluginManager.updateEnabledState(statusBarManager.isEnabled);
+
+  context.subscriptions.push(statusBarManager, pluginManager);
 }
 
 export function deactivate() {

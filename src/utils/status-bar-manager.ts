@@ -1,25 +1,19 @@
 import * as vscode from "vscode";
-import { plugins } from "../plugins";
 import { Config } from "./config";
-import { PluginManager } from "./plugin-manager";
 
-export class StatusBarManager implements vscode.Disposable {
+export class StatusBarManager extends vscode.EventEmitter<boolean> implements vscode.Disposable {
   private statusBarItem: vscode.StatusBarItem;
-  private pluginManager: PluginManager;
   private config: Config;
   private disposables: vscode.Disposable[] = [];
 
   constructor(context: vscode.ExtensionContext) {
+    super();
     this.statusBarItem = vscode.window.createStatusBarItem(
       vscode.StatusBarAlignment.Left,
       100
     );
     this.statusBarItem.command = "nuxtCompanion.toggle";
-    this.pluginManager = new PluginManager(context);
     this.config = Config.getInstance();
-
-    // Register all plugins
-    plugins.forEach((plugin) => this.pluginManager.registerPlugin(plugin));
 
     // 初始化状态栏
     this.updateStatus();
@@ -32,6 +26,10 @@ export class StatusBarManager implements vscode.Disposable {
         }
       })
     );
+  }
+
+  public get isEnabled() {
+    return this.config.isEnabled();
   }
 
   public async updateStatus() {
@@ -52,7 +50,7 @@ export class StatusBarManager implements vscode.Disposable {
         const currentState = this.config.isEnabled();
         const newState = !currentState;
         await this.config.set("enabled", newState);
-        this.pluginManager.updateEnabledState(newState);
+        this.fire(newState);
 
         // Show notification
         // vscode.window.showInformationMessage(
@@ -65,7 +63,6 @@ export class StatusBarManager implements vscode.Disposable {
 
   public dispose() {
     this.statusBarItem.dispose();
-    this.pluginManager.dispose();
     this.disposables.forEach((d) => d.dispose());
     this.disposables = [];
   }

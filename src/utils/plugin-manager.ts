@@ -16,9 +16,10 @@ export class PluginManager implements vscode.Disposable {
   private disposeEffects: vscode.Disposable[] = [];
   private config: Config;
 
-  constructor(context: vscode.ExtensionContext) {
+  constructor(context: vscode.ExtensionContext, plugins: NuxtPlugin[]) {
     this.context = context;
     this.config = Config.getInstance();
+    plugins.forEach((plugin) => this.registerPlugin(plugin));
     this.initializePlugins();
   }
 
@@ -31,7 +32,7 @@ export class PluginManager implements vscode.Disposable {
 
   public updateEnabledState(enabled: boolean) {
     this.config.set("enabled", enabled);
-    this.dispose(); // 清理旧的订阅
+    this.dispose();
     this.initializePlugins();
   }
 
