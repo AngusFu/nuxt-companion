@@ -128,10 +128,10 @@ Configure in VSCode settings:
   "nuxtCompanion.enableGoToAlias": true,
   "nuxtCompanion.enableTailwindUnitConverter": true,
   "nuxtCompanion.tailwindUnitConverterPrecision": 9,
-  "nuxtCompanion.tailwindUnitConverterShowDecorations": false,
+  "nuxtCompanion.tailwindUnitConverterShowDecorations": true,
   "nuxtCompanion.enableRemPxLiteralConverter": true,
   "nuxtCompanion.remPxLiteralPrecision": 9,
-  "nuxtCompanion.remPxLiteralShowDecorations": false
+  "nuxtCompanion.remPxLiteralShowDecorations": true
 }
 ```
 

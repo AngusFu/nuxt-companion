@@ -148,7 +148,8 @@ async function provideDefinition(
 
 export function activate(
   context: vscode.ExtensionContext,
-  disposeEffects: vscode.Disposable[]
+  disposeEffects: vscode.Disposable[],
+  workspaceUri: vscode.Uri
 ) {
   let lock = false;
   showSettingsUpdateDialog(context);

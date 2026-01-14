@@ -1,33 +1,41 @@
 import * as vscode from "vscode";
-import { activate as sidebar } from "./sidebar";
 import { plugins } from "./plugins";
 import { PluginManager } from "./utils/plugin-manager";
 import { StatusBarManager } from "./utils/status-bar-manager";
 
 export async function activate(context: vscode.ExtensionContext) {
-  // check if nuxt.config.{js,ts} exists
-  const workspaceUri = vscode.workspace.workspaceFolders?.[0]?.uri;
-  if (!workspaceUri) {
-    return;
-  }
-  const nuxtConfig = await vscode.workspace.findFiles(
-    new vscode.RelativePattern(workspaceUri, "nuxt.config.{ts,js,mjs}")
-  );
-
-  if (nuxtConfig.length === 0) {
+  const workspaceFolders = vscode.workspace.workspaceFolders;
+  if (!workspaceFolders || workspaceFolders.length === 0) {
     return;
   }
 
-  const pluginManager = new PluginManager(context, plugins);
   const statusBarManager = new StatusBarManager(context);
   statusBarManager.updateStatus();
   statusBarManager.registerToggleCommand(context);
-  statusBarManager.event((enabled) =>
-    pluginManager.updateEnabledState(enabled)
-  );
-  pluginManager.updateEnabledState(statusBarManager.isEnabled);
 
-  context.subscriptions.push(statusBarManager, pluginManager);
+  // Initialize plugins for each workspace folder that has nuxt.config
+  const pluginManagers: PluginManager[] = [];
+
+  for (const workspaceFolder of workspaceFolders) {
+    const workspaceUri = workspaceFolder.uri;
+    
+    // Check if nuxt.config exists in this workspace
+    const nuxtConfig = await vscode.workspace.findFiles(
+      new vscode.RelativePattern(workspaceUri.fsPath, "nuxt.config.{ts,js,mjs}")
+    );
+
+    if (nuxtConfig.length > 0) {
+      const pluginManager = new PluginManager(context, plugins, workspaceUri);
+      pluginManagers.push(pluginManager);
+      statusBarManager.event((enabled) =>
+        pluginManager.updateEnabledState(enabled)
+      );
+      pluginManager.updateEnabledState(statusBarManager.isEnabled);
+    }
+  }
+
+  // Push all managers and status bar to subscriptions
+  context.subscriptions.push(statusBarManager, ...pluginManagers);
 }
 
 export function deactivate() {

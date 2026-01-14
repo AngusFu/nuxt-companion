@@ -20,7 +20,7 @@ export abstract class BaseCollector<T> {
     protected debounceTime: number = 1000
   ) {
     this.watcher = vscode.workspace.createFileSystemWatcher(
-      new vscode.RelativePattern(workspaceUri, pattern)
+      new vscode.RelativePattern(workspaceUri.fsPath, pattern)
     );
 
     // 使用防抖处理文件变化事件

@@ -211,11 +211,9 @@ class LayoutsDefinitionProvider extends BaseDefinitionProvider<LayoutInfo> {
 
 export function activate(
   context: vscode.ExtensionContext,
-  disposeEffects: vscode.Disposable[]
+  disposeEffects: vscode.Disposable[],
+  workspaceUri: vscode.Uri
 ) {
-  const workspaceUri = vscode.workspace.workspaceFolders?.[0]?.uri;
-  if (!workspaceUri) return;
-
   const collector = new LayoutsCollector(workspaceUri);
   const hoverProvider = vscode.languages.registerHoverProvider(
     ["vue"],

@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { POWERED_BY_INFO } from "../utils/constants";
+import { POWERED_BY_INFO, DECORATION_RENDER_OPTIONS } from "../utils/constants";
 
 // Supported file types
 const SUPPORTED_LANGUAGES = ["vue", "typescript", "typescriptreact", "html"];
@@ -8,22 +8,10 @@ const SUPPORTED_LANGUAGES = ["vue", "typescript", "typescriptreact", "html"];
 const REM_PATTERN = /(["'`])(-?\d+(?:\.\d+)?)\s*rem\1/g;
 const PX_PATTERN = /(["'`])(-?\d+(?:\.\d+)?)\s*px\1/g;
 
-// Common decoration styles
-const decorationRenderOptions: vscode.DecorationRenderOptions = {
-  after: {
-    color: new vscode.ThemeColor("editorCodeLens.foreground"),
-    margin: "0 0 0 0.5rem",
-    fontStyle: "italic",
-    fontWeight: "normal",
-    textDecoration: "none",
-    border: "1px dashed green",
-  },
-  overviewRulerLane: vscode.OverviewRulerLane.Right,
-};
-
 export async function activate(
   context: vscode.ExtensionContext,
-  disposeEffects: vscode.Disposable[]
+  disposeEffects: vscode.Disposable[],
+  workspaceUri: vscode.Uri
 ): Promise<void> {
   // Check if already activated
   if (disposeEffects.some((d) => d instanceof RemPxLiteralConverter)) {
@@ -56,7 +44,7 @@ export class RemPxLiteralConverter implements vscode.Disposable {
 
     // Create decoration type for showing conversions
     this.decorationType = vscode.window.createTextEditorDecorationType(
-      decorationRenderOptions
+      DECORATION_RENDER_OPTIONS
     );
     this.disposables.push(this.decorationType);
 

@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { POWERED_BY_INFO } from "../utils/constants";
+import { POWERED_BY_INFO, DECORATION_RENDER_OPTIONS } from "../utils/constants";
 
 interface UnitMatch {
   range: vscode.Range;
@@ -42,26 +42,14 @@ const CONVERSION_CONFIGS: Record<"px2rem" | "rem2px", BaseConversionConfig> = {
   },
 };
 
-// Common decoration styles
-const decorationRenderOptions: vscode.DecorationRenderOptions = {
-  after: {
-    color: new vscode.ThemeColor("editorCodeLens.foreground"),
-    margin: "0 0 0 0.5rem",
-    fontStyle: "italic",
-    fontWeight: "normal",
-    textDecoration: "none",
-    border: "1px dashed green",
-  },
-  overviewRulerLane: vscode.OverviewRulerLane.Right,
-};
-
 function formatConvertedValue(value: string | number, unit: string): string {
   return `${value}${unit}`;
 }
 
 export async function activate(
   context: vscode.ExtensionContext,
-  disposeEffects: vscode.Disposable[]
+  disposeEffects: vscode.Disposable[],
+  workspaceUri: vscode.Uri
 ): Promise<void> {
   // Check if already activated
   if (disposeEffects.some((d) => d instanceof TailwindUnitConverter)) {
@@ -69,16 +57,12 @@ export async function activate(
   }
 
   // Check if Tailwind CSS is used in the project
-  const workspaceUri = vscode.workspace.workspaceFolders?.[0]?.uri;
-  if (!workspaceUri) {
-    return;
-  }
 
   const hasTailwindConfig =
     (
       await vscode.workspace.findFiles(
         new vscode.RelativePattern(
-          workspaceUri,
+          workspaceUri.fsPath,
           "tailwind.config.{js,ts,cjs,mjs}"
         )
       )
@@ -117,7 +101,7 @@ export class TailwindUnitConverter implements vscode.Disposable {
 
     // Create decoration type for showing conversions
     this.decorationType = vscode.window.createTextEditorDecorationType(
-      decorationRenderOptions
+      DECORATION_RENDER_OPTIONS
     );
     this.disposables.push(this.decorationType);
 

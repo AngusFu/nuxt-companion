@@ -1,5 +1,6 @@
 // VS Code API
 import * as vscode from "vscode";
+import * as path from "path";
 
 // Third-party libraries
 import { parseSync } from "@oxc-parser/wasm";
@@ -143,7 +144,7 @@ class APICollector extends BaseCollector<APICallInfo> {
     if (token?.isCancellationRequested) return [];
 
     const { glob, method, filter } = apiInfo;
-    const serverFolder = vscode.Uri.joinPath(folder, "server");
+    const serverFolder = vscode.Uri.file(path.join(folder.fsPath, "server"));
     const patterns = [`${glob}.${method}.ts`, `${glob}/index.${method}.ts`];
 
     const stream = globbyStream(patterns, {
@@ -179,7 +180,7 @@ class APIHoverProvider extends BaseHoverProvider<APICallInfo> {
     const folder = vscode.workspace.getWorkspaceFolder(document.uri)?.uri;
     if (!folder) return null;
 
-    const serverFolder = vscode.Uri.joinPath(folder, "server");
+    const serverFolder = vscode.Uri.file(path.join(folder.fsPath, "server"));
     if (document.uri.fsPath.startsWith(serverFolder.fsPath)) return null;
 
     const apiInfo = (this.collector as APICollector).getAPICallInfo(
@@ -234,7 +235,7 @@ class APIDefinitionProvider extends BaseDefinitionProvider<APICallInfo> {
     const folder = vscode.workspace.getWorkspaceFolder(document.uri)?.uri;
     if (!folder) return null;
 
-    const serverFolder = vscode.Uri.joinPath(folder, "server");
+    const serverFolder = vscode.Uri.file(path.join(folder.fsPath, "server"));
     if (document.uri.fsPath.startsWith(serverFolder.fsPath)) return null;
 
     // 插值情况忽略
@@ -283,11 +284,9 @@ class APIDefinitionProvider extends BaseDefinitionProvider<APICallInfo> {
 
 export function activate(
   context: vscode.ExtensionContext,
-  disposeEffects: vscode.Disposable[]
+  disposeEffects: vscode.Disposable[],
+  workspaceUri: vscode.Uri
 ) {
-  const workspaceUri = vscode.workspace.workspaceFolders?.[0]?.uri;
-  if (!workspaceUri) return;
-
   const collector = new APICollector(workspaceUri);
   const hoverProvider = vscode.languages.registerHoverProvider(
     SUPPORTED_LANGUAGES,

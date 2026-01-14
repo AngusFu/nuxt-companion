@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import * as path from "path";
 import { POWERED_BY_INFO } from "../utils/constants";
 import { NuxtPage, resolvePagesRoutes } from "../utils/nuxt-page";
 import { BaseCollector } from "./base/collector";
@@ -17,7 +18,7 @@ class RoutesCollector extends BaseCollector<NuxtPage> {
     this.currentBuildToken = new vscode.CancellationTokenSource();
 
     try {
-      const pagesDir = vscode.Uri.joinPath(this.workspaceUri, "pages").fsPath;
+      const pagesDir = path.join(this.workspaceUri.fsPath, "pages");
       const pagesRoutes = await resolvePagesRoutes(
         pagesDir,
         this.currentBuildToken.token
@@ -86,11 +87,9 @@ class RoutesHoverProvider extends BaseHoverProvider<NuxtPage> {
 
 export function activate(
   context: vscode.ExtensionContext,
-  disposeEffects: vscode.Disposable[]
+  disposeEffects: vscode.Disposable[],
+  workspaceUri: vscode.Uri
 ) {
-  const workspaceUri = vscode.workspace.workspaceFolders?.[0]?.uri;
-  if (!workspaceUri) return;
-
   const collector = new RoutesCollector(workspaceUri);
   const hoverProvider = vscode.languages.registerHoverProvider(
     ["typescript", "typescriptreact", "vue"],

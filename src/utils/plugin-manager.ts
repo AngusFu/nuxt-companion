@@ -6,8 +6,9 @@ export interface NuxtPlugin {
   name: string;
   activate: (
     context: vscode.ExtensionContext,
-    disposeEffects: vscode.Disposable[]
-  ) => void;
+    disposeEffects: vscode.Disposable[],
+    workspaceUri: vscode.Uri
+  ) => void | Promise<void>;
 }
 
 export class PluginManager implements vscode.Disposable {
@@ -15,9 +16,11 @@ export class PluginManager implements vscode.Disposable {
   private plugins: Map<string, NuxtPlugin> = new Map();
   private disposeEffects: vscode.Disposable[] = [];
   private config: Config;
+  private workspaceUri: vscode.Uri;
 
-  constructor(context: vscode.ExtensionContext, plugins: NuxtPlugin[]) {
+  constructor(context: vscode.ExtensionContext, plugins: NuxtPlugin[], workspaceUri: vscode.Uri) {
     this.context = context;
+    this.workspaceUri = workspaceUri;
     this.config = Config.getInstance();
     plugins.forEach((plugin) => this.registerPlugin(plugin));
     this.initializePlugins();
@@ -26,7 +29,7 @@ export class PluginManager implements vscode.Disposable {
   public registerPlugin(plugin: NuxtPlugin) {
     this.plugins.set(plugin.id, plugin);
     if (this.config.isEnabled() && this.config.isPluginEnabled(plugin.id)) {
-      plugin.activate(this.context, this.disposeEffects);
+      plugin.activate(this.context, this.disposeEffects, this.workspaceUri);
     }
   }
 
@@ -43,7 +46,7 @@ export class PluginManager implements vscode.Disposable {
 
     for (const plugin of this.plugins.values()) {
       if (this.config.isPluginEnabled(plugin.id)) {
-        plugin.activate(this.context, this.disposeEffects);
+        plugin.activate(this.context, this.disposeEffects, this.workspaceUri);
       }
     }
   }
