@@ -111,6 +111,7 @@
     "@typescript-eslint/eslint-plugin": "^5.30.0",
     "@typescript-eslint/parser": "^5.30.0",
     "@vercel/ncc": "^0.38.3",
+    "@vscode/vsce": "^3.7.1",
     "eslint": "^8.13.0",
     "esquery": "^1.6.0",
     "globby": "^14.1.0",
