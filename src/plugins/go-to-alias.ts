@@ -1,10 +1,10 @@
 /**
  * original code from https://github.com/antfu/vscode-goto-alias
  */
-import { parseSync } from "@oxc-parser/wasm";
 import * as t from "@oxc-project/types";
 import * as esquery from "esquery";
 import * as vscode from "vscode";
+import { parseAST } from "../utils/ast";
 
 const eQuery = (node: t.Span, selector: string) =>
   esquery.query(node as any, selector);
@@ -28,7 +28,7 @@ function showSettingsUpdateDialog(ext: vscode.ExtensionContext) {
         'Click "OK" to set it now.',
       ].join("\n"),
       "OK",
-      "Not now"
+      "Not now",
     )
     .then((selection) => {
       if (selection === "OK") {
@@ -45,7 +45,7 @@ function getRangeFromOffset(
   document: vscode.TextDocument,
   baseRange: vscode.Range,
   startOffset: number,
-  endOffset: number
+  endOffset: number,
 ): vscode.Range {
   // 获取基础范围的起始偏移量
   const baseStartOffset = document.offsetAt(baseRange.start);
@@ -63,12 +63,12 @@ function getRangeFromOffset(
 
 async function provideDefinition(
   document: vscode.TextDocument,
-  position: vscode.Position
+  position: vscode.Position,
 ) {
   const definitions = await vscode.commands.executeCommand(
     "vscode.executeDefinitionProvider",
     document.uri,
-    position
+    position,
   );
   if (!Array.isArray(definitions) || !definitions.length) {
     return definitions as vscode.DefinitionLink[];
@@ -98,19 +98,15 @@ async function provideDefinition(
         doc,
         targetRange,
         i,
-        content.length
+        content.length,
       );
       const importContent = doc.getText(contentRange);
 
-      const parsed = parseSync(importContent, {
-        sourceFilename: targetUri.path,
-      });
-      const cloned = JSON.parse(parsed.programJson);
-      parsed.free();
-      const imports = eQuery(cloned as unknown as any, "ImportExpression");
+      const ast = parseAST(importContent, targetUri.path);
+      const imports = eQuery(ast as unknown as any, "ImportExpression");
       const members = eQuery(
-        cloned as unknown as any,
-        "MemberExpression > Literal"
+        ast as unknown as any,
+        "MemberExpression > Literal",
       );
 
       if (!imports.length || !members.length) {
@@ -123,7 +119,7 @@ async function provideDefinition(
         await vscode.commands.executeCommand(
           "vscode.executeDefinitionProvider",
           targetUri,
-          range.start
+          range.start,
         );
 
       if (dtsDefinitions.length) {
@@ -134,7 +130,7 @@ async function provideDefinition(
             ({
               ...el,
               originSelectionRange,
-            } as vscode.DefinitionLink)
+            }) as vscode.DefinitionLink,
         );
         modifiedDefinitions.unshift(...links);
       } else {
@@ -149,7 +145,7 @@ async function provideDefinition(
 export function activate(
   context: vscode.ExtensionContext,
   disposeEffects: vscode.Disposable[],
-  workspaceUri: vscode.Uri
+  workspaceUri: vscode.Uri,
 ) {
   let lock = false;
   showSettingsUpdateDialog(context);
@@ -160,7 +156,7 @@ export function activate(
       async provideDefinition(
         document: vscode.TextDocument,
         position: vscode.Position,
-        cancelToken: vscode.CancellationToken
+        cancelToken: vscode.CancellationToken,
       ) {
         // prevent infinite loop and reduce unnecessary calls
         if (lock) return null;
@@ -173,7 +169,7 @@ export function activate(
           lock = false;
         }
       },
-    }
+    },
   );
   disposeEffects.push(provider);
 }

@@ -1,16 +1,13 @@
-import { parseSync } from "@oxc-parser/wasm";
 import { processCallExpression } from "../api-parser";
 import { describe, it, expect } from "@jest/globals";
 import * as t from "@oxc-project/types";
 import * as esquery from "esquery";
+import { parseAST } from "../ast";
 
 describe("API Parser", () => {
   // 辅助函数：将代码字符串解析为 AST
   function parseCode(code: string) {
-    const parsed = parseSync(code, { sourceFilename: "test.ts" });
-    const ast = JSON.parse(parsed.programJson);
-    parsed.free();
-    return ast;
+    return parseAST(code, "test.ts");
   }
   const eQuery = (node: t.Span, selector: string) =>
     esquery.query(node as any, selector);

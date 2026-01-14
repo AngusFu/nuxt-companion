@@ -2,12 +2,12 @@
 import { readFile } from "node:fs/promises";
 import * as vscode from "vscode";
 
-import { parseSync } from "@oxc-parser/wasm";
 import * as t from "@oxc-project/types";
 import * as esquery from "esquery";
 import { globby } from "globby";
 import { extname, join } from "pathe";
 import { encodePath, joinURL, withLeadingSlash } from "ufo";
+import { parseAST } from "./ast";
 
 function escapeRE(string: string) {
   // Escape characters with special meaning either inside or outside character sets.
@@ -17,7 +17,7 @@ function escapeRE(string: string) {
 
 function uniqueBy<T>(array: T[], key: keyof T) {
   return array.filter(
-    (v, i, self) => self.findIndex((t) => t[key] === v[key]) === i
+    (v, i, self) => self.findIndex((t) => t[key] === v[key]) === i,
   );
 }
 
@@ -60,7 +60,7 @@ export type NuxtPage = {
 
 export async function resolvePagesRoutes(
   pagesDir: string = join(process.cwd(), "pages"),
-  token?: vscode.CancellationToken
+  token?: vscode.CancellationToken,
 ): Promise<NuxtPage[]> {
   const scannedFiles: ScannedFile[] = [];
 
@@ -88,11 +88,11 @@ export async function resolvePagesRoutes(
 
   // sort scanned files using en-US locale to make the result consistent across different system locales
   scannedFiles.sort((a, b) =>
-    a.relativePath.localeCompare(b.relativePath, "en-US")
+    a.relativePath.localeCompare(b.relativePath, "en-US"),
   );
 
   const allRoutes = generateRoutesFromFiles(
-    uniqueBy(scannedFiles, "relativePath")
+    uniqueBy(scannedFiles, "relativePath"),
   );
 
   // 检查取消状态
@@ -129,7 +129,7 @@ function generateRoutesFromFiles(files: ScannedFile[]): NuxtPage[] {
   const routes: NuxtPage[] = [];
 
   const sortedFiles = [...files].sort(
-    (a, b) => a.relativePath.length - b.relativePath.length
+    (a, b) => a.relativePath.length - b.relativePath.length,
   );
 
   for (const file of sortedFiles) {
@@ -167,7 +167,7 @@ function generateRoutesFromFiles(files: ScannedFile[]): NuxtPage[] {
 
       const segmentName = tokens
         .map(({ value, type }) =>
-          type === SegmentTokenType.group ? "" : value
+          type === SegmentTokenType.group ? "" : value,
         )
         .join("");
 
@@ -177,14 +177,14 @@ function generateRoutesFromFiles(files: ScannedFile[]): NuxtPage[] {
       // ex: parent.vue + parent/child.vue
       const routePath = getRoutePath(
         tokens,
-        segments[i + 1] !== undefined && segments[i + 1] !== "index"
+        segments[i + 1] !== undefined && segments[i + 1] !== "index",
       );
       const path = withLeadingSlash(
-        joinURL(route.path, routePath.replace(INDEX_PAGE_RE, "/"))
+        joinURL(route.path, routePath.replace(INDEX_PAGE_RE, "/")),
       );
       const child = parent.find(
         (parentRoute) =>
-          parentRoute.name === route.name && parentRoute.path === path
+          parentRoute.name === route.name && parentRoute.path === path,
       );
 
       if (child && child.children) {
@@ -206,7 +206,7 @@ function generateRoutesFromFiles(files: ScannedFile[]): NuxtPage[] {
 const COLON_RE = /:/g;
 function getRoutePath(
   tokens: SegmentToken[],
-  hasSucceedingSegment = false
+  hasSucceedingSegment = false,
 ): string {
   return tokens.reduce((path, token) => {
     return (
@@ -214,14 +214,14 @@ function getRoutePath(
       (token.type === SegmentTokenType.optional
         ? `:${token.value}?`
         : token.type === SegmentTokenType.dynamic
-        ? `:${token.value}()`
-        : token.type === SegmentTokenType.catchall
-        ? hasSucceedingSegment
-          ? `:${token.value}([^/]*)*`
-          : `:${token.value}(.*)*`
-        : token.type === SegmentTokenType.group
-        ? ""
-        : encodePath(token.value).replace(COLON_RE, "\\:"))
+          ? `:${token.value}()`
+          : token.type === SegmentTokenType.catchall
+            ? hasSucceedingSegment
+              ? `:${token.value}([^/]*)*`
+              : `:${token.value}(.*)*`
+            : token.type === SegmentTokenType.group
+              ? ""
+              : encodePath(token.value).replace(COLON_RE, "\\:"))
     );
   }, "/");
 }
@@ -248,12 +248,12 @@ function parseSegment(segment: string, absolutePath: string) {
         state === SegmentParserState.static
           ? SegmentTokenType.static
           : state === SegmentParserState.dynamic
-          ? SegmentTokenType.dynamic
-          : state === SegmentParserState.optional
-          ? SegmentTokenType.optional
-          : state === SegmentParserState.catchall
-          ? SegmentTokenType.catchall
-          : SegmentTokenType.group,
+            ? SegmentTokenType.dynamic
+            : state === SegmentParserState.optional
+              ? SegmentTokenType.optional
+              : state === SegmentParserState.catchall
+                ? SegmentTokenType.catchall
+                : SegmentTokenType.group,
       value: buffer,
     });
 
@@ -324,7 +324,7 @@ function parseSegment(segment: string, absolutePath: string) {
         ) {
           if (c !== "[" && c !== "]") {
             console.warn(
-              `'\`${c}\`' is not allowed in a dynamic route parameter and has been ignored. Consider renaming \`${absolutePath}\`.`
+              `'\`${c}\`' is not allowed in a dynamic route parameter and has been ignored. Consider renaming \`${absolutePath}\`.`,
             );
           }
         }
@@ -344,7 +344,7 @@ function parseSegment(segment: string, absolutePath: string) {
 
 function findRouteByName(
   name: string,
-  routes: NuxtPage[]
+  routes: NuxtPage[],
 ): NuxtPage | undefined {
   for (const route of routes) {
     if (route.name === name) {
@@ -358,7 +358,7 @@ const NESTED_PAGE_RE = /\//g;
 function prepareRoutes(
   routes: NuxtPage[],
   parent?: NuxtPage,
-  names = new Set<string>()
+  names = new Set<string>(),
 ) {
   for (const route of routes) {
     // Remove -index
@@ -373,7 +373,7 @@ function prepareRoutes(
           ? `is the same as \`${existingRoute.file}\``
           : "is a duplicate";
         console.warn(
-          `Route name generated for \`${route.file}\` ${extra}. You may wish to set a custom name using \`definePageMeta\` within the page file.`
+          `Route name generated for \`${route.file}\` ${extra}. You may wish to set a custom name using \`definePageMeta\` within the page file.`,
         );
       }
     }
@@ -401,7 +401,7 @@ function prepareRoutes(
 
 async function augmentPages(
   routes: NuxtPage[],
-  token?: vscode.CancellationToken
+  token?: vscode.CancellationToken,
 ) {
   for (const route of routes) {
     // 检查取消状态
@@ -447,28 +447,22 @@ async function getRouteMeta(file: string, token?: vscode.CancellationToken) {
 
     const scriptContent = fileContent.slice(
       scriptStart.index! + scriptStart[0].length,
-      scriptEnd.index!
+      scriptEnd.index!,
     );
 
     try {
-      const parsed = parseSync(scriptContent, {
-        sourceFilename: file.replace(/\.vue$/, ".vue.ts"),
-      });
-      const cloned = JSON.parse(parsed.programJson);
-      parsed.free();
-
       // 检查取消状态
       if (token?.isCancellationRequested) {
         return null;
       }
 
       const entries = eQuery(
-        cloned as unknown as any,
-        'CallExpression[callee.name="definePageMeta"]'
+        parseAST(scriptContent, file.replace(/\.vue$/, ".vue.ts")),
+        'CallExpression[callee.name="definePageMeta"]',
       )
         .map((el) => (el as t.CallExpression).arguments[0])
         .filter(
-          (el): el is t.ObjectExpression => el?.type === "ObjectExpression"
+          (el): el is t.ObjectExpression => el?.type === "ObjectExpression",
         )
         .map((el: t.ObjectExpression) =>
           (el.properties as t.ObjectProperty[])
@@ -481,7 +475,7 @@ async function getRouteMeta(file: string, token?: vscode.CancellationToken) {
               }
               return null!;
             })
-            .filter(Boolean)
+            .filter(Boolean),
         )
         .flat();
       return entries.length ? Object.fromEntries(entries) : null;

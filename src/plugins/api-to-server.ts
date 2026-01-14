@@ -3,7 +3,6 @@ import * as vscode from "vscode";
 import * as path from "path";
 
 // Third-party libraries
-import { parseSync } from "@oxc-parser/wasm";
 import * as t from "@oxc-project/types";
 import * as esquery from "esquery";
 
@@ -17,6 +16,7 @@ import {
   FileChangeEvent,
 } from "./base";
 import { globbyStream } from "globby";
+import { parseAST } from "../utils/ast";
 
 const eQuery = (node: t.Span, selector: string) =>
   esquery.query(node as any, selector);
@@ -31,7 +31,7 @@ class APICollector extends BaseCollector<APICallInfo> {
 
   protected async buildDataMap(
     token?: vscode.CancellationToken,
-    event?: FileChangeEvent
+    event?: FileChangeEvent,
   ): Promise<void> {
     // 这个collector比较特殊，它不需要主动收集数据
     // 而是在provideDefinition和provideHover时动态收集
@@ -52,19 +52,14 @@ class APICollector extends BaseCollector<APICallInfo> {
         new vscode.Position(0, 0),
         new vscode.Position(
           document.lineCount,
-          document.lineAt(document.lineCount - 1).text.length
-        )
-      )
+          document.lineAt(document.lineCount - 1).text.length,
+        ),
+      ),
     );
-    const parsed = parseSync(documentContent, {
-      sourceFilename: document.uri.path,
-    });
-    const cloned = JSON.parse(parsed.programJson);
-    parsed.free();
     const callExprs = [
       ...eQuery(
-        cloned as unknown as any,
-        "CallExpression[arguments.length > 0]"
+        parseAST(documentContent, document.uri.path),
+        "CallExpression[arguments.length > 0]",
       ),
     ];
 
@@ -73,7 +68,7 @@ class APICollector extends BaseCollector<APICallInfo> {
 
   public getDocumentAPICalls(
     document: vscode.TextDocument,
-    token?: vscode.CancellationToken
+    token?: vscode.CancellationToken,
   ) {
     let callExpressions = this.astCache.get(document.uri.path);
     if (!callExpressions?.length) {
@@ -91,13 +86,13 @@ class APICollector extends BaseCollector<APICallInfo> {
   public getAPICallInfo(
     document: vscode.TextDocument,
     position: vscode.Position,
-    token?: vscode.CancellationToken
+    token?: vscode.CancellationToken,
   ): { info: APICallInfo; range: vscode.Range } | null {
     if (token?.isCancellationRequested) return null;
 
     const quotedRange = document.getWordRangeAtPosition(
       position,
-      /((['"])(?:(?!\2).)*\2|`(?:[^`\\]|\\.)*`)/
+      /((['"])(?:(?!\2).)*\2|`(?:[^`\\]|\\.)*`)/,
     );
     if (!quotedRange) return null;
 
@@ -107,7 +102,7 @@ class APICollector extends BaseCollector<APICallInfo> {
     const expr = (callExpressions || []).find((el) => {
       const range = new vscode.Range(
         document.positionAt(el.start),
-        document.positionAt(el.end)
+        document.positionAt(el.end),
       );
       return range.contains(quotedRange);
     });
@@ -139,7 +134,7 @@ class APICollector extends BaseCollector<APICallInfo> {
   public async findAPIFiles(
     folder: vscode.Uri,
     apiInfo: APICallInfo,
-    token?: vscode.CancellationToken
+    token?: vscode.CancellationToken,
   ): Promise<vscode.Uri[]> {
     if (token?.isCancellationRequested) return [];
 
@@ -175,7 +170,7 @@ class APIHoverProvider extends BaseHoverProvider<APICallInfo> {
   public async provideHover(
     document: vscode.TextDocument,
     position: vscode.Position,
-    token: vscode.CancellationToken
+    token: vscode.CancellationToken,
   ): Promise<vscode.Hover | null> {
     const folder = vscode.workspace.getWorkspaceFolder(document.uri)?.uri;
     if (!folder) return null;
@@ -186,14 +181,14 @@ class APIHoverProvider extends BaseHoverProvider<APICallInfo> {
     const apiInfo = (this.collector as APICollector).getAPICallInfo(
       document,
       position,
-      token
+      token,
     );
     if (!apiInfo) return null;
 
     const files = await (this.collector as APICollector).findAPIFiles(
       folder,
       apiInfo.info,
-      token
+      token,
     );
 
     if (files[0]) {
@@ -205,9 +200,9 @@ class APIHoverProvider extends BaseHoverProvider<APICallInfo> {
       return new vscode.Hover(
         new vscode.MarkdownString(
           `Probably refers to the **API endpoint**: ${method} ${link}` +
-            POWERED_BY_INFO
+            POWERED_BY_INFO,
         ),
-        apiInfo.range
+        apiInfo.range,
       );
     }
 
@@ -216,7 +211,7 @@ class APIHoverProvider extends BaseHoverProvider<APICallInfo> {
 
   protected createHoverContent(
     data: APICallInfo,
-    range: vscode.Range
+    range: vscode.Range,
   ): vscode.Hover {
     throw new Error("Method not implemented.");
   }
@@ -230,7 +225,7 @@ class APIDefinitionProvider extends BaseDefinitionProvider<APICallInfo> {
   public async provideDefinition(
     document: vscode.TextDocument,
     position: vscode.Position,
-    token: vscode.CancellationToken
+    token: vscode.CancellationToken,
   ): Promise<vscode.DefinitionLink[] | null> {
     const folder = vscode.workspace.getWorkspaceFolder(document.uri)?.uri;
     if (!folder) return null;
@@ -246,7 +241,7 @@ class APIDefinitionProvider extends BaseDefinitionProvider<APICallInfo> {
     const apiInfo = (this.collector as APICollector).getAPICallInfo(
       document,
       position,
-      token
+      token,
     );
     if (!apiInfo) return null;
 
@@ -254,7 +249,7 @@ class APIDefinitionProvider extends BaseDefinitionProvider<APICallInfo> {
     const files = await (this.collector as APICollector).findAPIFiles(
       folder,
       apiInfo.info,
-      token
+      token,
     );
     if (token.isCancellationRequested) return null;
 
@@ -264,7 +259,7 @@ class APIDefinitionProvider extends BaseDefinitionProvider<APICallInfo> {
           targetUri: files[0],
           targetRange: new vscode.Range(
             new vscode.Position(0, 0),
-            new vscode.Position(0, 0)
+            new vscode.Position(0, 0),
           ),
           originSelectionRange: apiInfo.range,
         },
@@ -276,7 +271,7 @@ class APIDefinitionProvider extends BaseDefinitionProvider<APICallInfo> {
 
   protected createDefinitionLinks(
     data: APICallInfo,
-    range: vscode.Range
+    range: vscode.Range,
   ): vscode.DefinitionLink[] {
     throw new Error("Method not implemented.");
   }
@@ -285,16 +280,16 @@ class APIDefinitionProvider extends BaseDefinitionProvider<APICallInfo> {
 export function activate(
   context: vscode.ExtensionContext,
   disposeEffects: vscode.Disposable[],
-  workspaceUri: vscode.Uri
+  workspaceUri: vscode.Uri,
 ) {
   const collector = new APICollector(workspaceUri);
   const hoverProvider = vscode.languages.registerHoverProvider(
     SUPPORTED_LANGUAGES,
-    new APIHoverProvider(collector)
+    new APIHoverProvider(collector),
   );
   const defProvider = vscode.languages.registerDefinitionProvider(
     SUPPORTED_LANGUAGES,
-    new APIDefinitionProvider(collector)
+    new APIDefinitionProvider(collector),
   );
 
   // 监听文档内容变化
@@ -306,7 +301,7 @@ export function activate(
       ) {
         collector.getDocumentAPICalls(document);
       }
-    }
+    },
   );
 
   disposeEffects.push(hoverProvider, defProvider, onDocumentChange, {
