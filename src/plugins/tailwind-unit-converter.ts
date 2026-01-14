@@ -14,7 +14,7 @@ const SUPPORTED_LANGUAGES = ["vue", "typescript", "typescriptreact", "html"];
 
 // Regular expression patterns
 const TAILWIND_CLASS_PATTERN =
-  /(?<=[\:\s'"!])([-a-zA-Z][-\w]*-\[-?[0-9]+(?:\.[0-9]+)?(?:rem|px)\])/;
+  /(?<=[:'"!])([-a-zA-Z][-\w]*-\[-?[0-9]+(?:\.[0-9]+)?(?:rem|px)\])/;
 
 interface ConversionConfig {
   sourceUnit: "px" | "rem";
@@ -273,7 +273,7 @@ export class TailwindUnitConverter implements vscode.Disposable {
   private async convertUnits(
     editor: vscode.TextEditor,
     config: ConversionConfig,
-    singleValue: boolean = true
+    singleValue = true
   ) {
     try {
       const document = editor.document;

@@ -100,7 +100,7 @@ export function processCallExpression(
   const pathname = parse(path)!.pathname;
   if (!pathname) return null;
 
-  let glob = pathname.replace(/^\//, "");
+  const glob = pathname.replace(/^\//, "");
   const regex = RegExp(glob.replace(/\*/g, () => "\\[.+\\]"));
   const filter = (uri: vscode.Uri | string) =>
     regex.test(typeof uri === "string" ? uri : uri.path);
