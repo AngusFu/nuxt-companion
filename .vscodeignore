@@ -8,3 +8,6 @@ tsconfig.json
 example/
 jest.config.js
 assets/icon-original.png
+.specstory/
+.cursor/
+.claude/
